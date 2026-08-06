@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+openai
+apscheduler
+sqlalchemy
+alembic
+requests
+beautifulsoup4
+python-dotenv
+pydantic-settings

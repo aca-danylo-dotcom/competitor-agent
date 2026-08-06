@@ -93,6 +93,34 @@ def _fmt(moment: dt.datetime | None) -> str:
     return moment.strftime("%d.%m %H:%M")
 
 
+def _visible_prices(session, competitor_id: int) -> list[PriceEntry]:
+    """Актуальные цены конкурента, кроме тех, что с чужих нам рынков."""
+    entries = session.scalars(
+        select(PriceEntry)
+        .join(ServiceOffering, ServiceOffering.id == PriceEntry.service_offering_id)
+        .where(ServiceOffering.competitor_id == competitor_id)
+        .order_by(PriceEntry.captured_at.desc())
+    ).all()
+    return [entry for entry in entries if not pricing.is_ignored(entry.price_text)]
+
+
+def _cheapest_price(session, competitor_id: int) -> dict | None:
+    """С чего начинается прайс конкурента — самая низкая из показываемых цен."""
+    parsed = []
+    for entry in _visible_prices(session, competitor_id):
+        price = pricing.parse_price(entry.price_text)
+        if price is None:
+            continue
+        usd = pricing.to_usd(price["low"], price["currency"])
+        # Сравниваем в долларах, показываем как на сайте: дешевизна должна
+        # определяться суммой, а не тем, в какой валюте её написали.
+        parsed.append((usd if usd is not None else price["low"], price))
+    if not parsed:
+        return None
+    price = min(parsed, key=lambda pair: pair[0])[1]
+    return {"text": pricing.pretty(price["text"]), "usd": pricing.usd_label(price)}
+
+
 def _nav(active: str) -> list[dict]:
     """Разделы панели. Значки — те же контурные, что в CRM."""
     items = [
@@ -211,16 +239,14 @@ def competitors(request: Request, status: str | None = None):
                     ServiceOffering.competitor_id == competitor.id
                 )
             )
-            prices = session.scalar(
-                select(func.count(PriceEntry.id))
-                .join(ServiceOffering, ServiceOffering.id == PriceEntry.service_offering_id)
-                .where(ServiceOffering.competitor_id == competitor.id)
-            )
             last = session.scalar(
                 select(func.max(PageSnapshot.captured_at)).where(
                     PageSnapshot.competitor_id == competitor.id
                 )
             )
+            # В колонке цен полезно не «сколько их всего», а с чего начинается
+            # прайс: по этому числу конкуренты и сравниваются взглядом.
+            cheapest = _cheapest_price(session, competitor.id)
             rows.append(
                 {
                     "id": competitor.id,
@@ -230,7 +256,7 @@ def competitors(request: Request, status: str | None = None):
                     "status_label": STATUS_LABELS.get(competitor.status, competitor.status),
                     "is_own": competitor.is_own,
                     "services": services,
-                    "prices": prices,
+                    "price_from": cheapest,
                     "last_scan": _fmt(last),
                 }
             )
@@ -260,23 +286,33 @@ def competitor_card(request: Request, competitor_id: int):
             .where(ServiceOffering.competitor_id == competitor_id)
             .order_by(ServiceOffering.first_seen_at)
         ).all():
-            history = session.scalars(
-                select(PriceEntry)
-                .where(PriceEntry.service_offering_id == offering.id)
-                .order_by(PriceEntry.captured_at.desc())
-                .limit(2)
-            ).all()
+            history = [
+                entry
+                for entry in session.scalars(
+                    select(PriceEntry)
+                    .where(PriceEntry.service_offering_id == offering.id)
+                    .order_by(PriceEntry.captured_at.desc())
+                ).all()
+                if not pricing.is_ignored(entry.price_text)
+            ]
+            current = pricing.parse_price(history[0].price_text) if history else None
             services.append(
                 {
                     "name": offering.name,
                     "description": offering.description,
-                    "price": history[0].price_text if history else None,
+                    "price": pricing.pretty(history[0].price_text) if history else None,
+                    "price_usd": pricing.usd_label(current) if current else None,
                     # Прошлая цена показывается зачёркнутой рядом с новой — так
                     # видно направление движения, а не только текущее число.
-                    "old_price": history[1].price_text if len(history) > 1 else None,
+                    "old_price": pricing.pretty(history[1].price_text) if len(history) > 1 else None,
                     "first_seen": _fmt(offering.first_seen_at),
                 }
             )
+
+        # Услуги с ценой — наверх: ради них таблицу и открывают. Внутри групп
+        # порядок прежний, по времени появления.
+        services.sort(key=lambda s: s["price"] is None)
+        priced = sum(1 for s in services if s["price"])
 
         promotions = [
             {"description": promo.description, "captured_at": _fmt(promo.captured_at)}
@@ -357,6 +393,7 @@ def competitor_card(request: Request, competitor_id: int):
         competitor=card,
         status_label=STATUS_LABELS.get(card["status"], card["status"]),
         services=services,
+        priced=priced,
         promotions=promotions,
         review=review,
         changes=changes,
@@ -403,10 +440,15 @@ def prices(request: Request):
             "competitor_id": domains.get(item["domain"]),
             "domain": item["domain"],
             "service": item["service"],
-            "price_text": item["price_text"],
+            "price_text": pricing.pretty(item["price_text"]),
+            "price_usd": item["usd_label"],
             "period_label": PERIOD_LABELS.get(item["period"], ""),
         }
-        for item in sorted(data["prices"], key=lambda i: (i["domain"], i["low"]))
+        # Сортируем по долларовому эквиваленту: так рядом стоят сопоставимые
+        # предложения, а не сначала все гривневые, потом все долларовые.
+        for item in sorted(
+            data["prices"], key=lambda i: (i["usd_low"] is None, i["usd_low"] or i["low"])
+        )
     ]
 
     offer = None

@@ -25,6 +25,7 @@ BLOCKED_DOMAINS = {
     "fl.ru",
     "youdo.com",
     "freelancehunt.com",
+    "kabanchik.ua",
     "freelance.ru",
     "weblancer.net",
     "toptal.com",
@@ -58,6 +59,11 @@ def normalize_domain(url: str) -> str:
 
 def is_blocked(domain: str) -> bool:
     return any(domain == b or domain.endswith("." + b) for b in BLOCKED_DOMAINS)
+
+
+def is_ignored_market(domain: str) -> bool:
+    """Сайт с рынка, за которым мы не следим (см. IGNORED_DOMAIN_ZONES в .env)."""
+    return any(domain.endswith(zone) for zone in settings.ignored_zone_list)
 
 
 def manual_runs_today(session: Session) -> int:
@@ -119,6 +125,9 @@ def run_discovery(
             found += 1
             if is_blocked(domain):
                 skipped.append(f"{domain} (каталог)")
+                continue
+            if is_ignored_market(domain):
+                skipped.append(f"{domain} (не наш рынок)")
                 continue
             if domain in known:
                 continue

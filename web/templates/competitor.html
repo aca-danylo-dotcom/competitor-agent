@@ -40,34 +40,43 @@
   <div class="card table-wrap">
     <h2>Услуги и цены</h2>
     {% if services %}
-      <table class="data-grid">
+      <p class="table-note">
+        {% if priced %}
+          Цену показывают у {{ priced }} из {{ services | length }} услуг — они сверху.
+        {% else %}
+          Цен на сайте нет: {{ services | length }} услуг без прайса. Такие конкуренты
+          зовут «обсудить проект», и сравнивать с ними можно только состав услуг.
+        {% endif %}
+      </p>
+      <table class="data-grid tidy">
         <thead>
           <tr>
             <th>Услуга</th>
-            <th>Цена</th>
-            <th>Замечена</th>
+            <th class="price-col">Цена</th>
           </tr>
         </thead>
         <tbody>
           {% for service in services %}
-            <tr>
+            <tr {% if not service.price %}class="dim"{% endif %}>
               <td>
                 <span class="strong">{{ service.name }}</span>
                 {% if service.description %}
                   <span class="muted small">{{ service.description[:110] }}</span>
                 {% endif %}
               </td>
-              <td>
+              <td class="price-col">
                 {% if service.price %}
-                  {{ service.price }}
+                  <span class="price">{{ service.price }}</span>
+                  {% if service.price_usd %}
+                    <span class="muted small">{{ service.price_usd }}</span>
+                  {% endif %}
                   {% if service.old_price %}
                     <span class="muted small strike">{{ service.old_price }}</span>
                   {% endif %}
                 {% else %}
-                  <span class="muted small">не указана</span>
+                  <span class="muted small">по запросу</span>
                 {% endif %}
               </td>
-              <td class="muted small">{{ service.first_seen }}</td>
             </tr>
           {% endfor %}
         </tbody>

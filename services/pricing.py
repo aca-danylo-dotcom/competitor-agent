@@ -90,6 +90,67 @@ def parse_price(text: str) -> dict | None:
     }
 
 
+CURRENCY_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£", "UAH": "₴", "PLN": "zł", "RUB": "₽"}
+
+# «от 3000», «from $2,000», «від 15000» — цена нижняя, а не точная.
+FROM_MARKERS = re.compile(r"\b(от|від|from|starting|начиная)\b", re.IGNORECASE)
+
+
+def _money(value: float, symbol: str) -> str:
+    return f"{symbol}{value:,.0f}".replace(",", " ")
+
+
+def pretty(price_text: str) -> str:
+    """Приводит цену к одному виду: «Price range: 1,000$ USD through 3,000$ USD» → «$1 000 – $3 000».
+
+    Конкуренты пишут цены как хотят, и в колонке рядом это выглядит мусором.
+    Разбираем и собираем заново; если разобрать не вышло — оставляем как есть,
+    лучше сырая правда, чем придуманная аккуратность.
+    """
+    parsed = parse_price(price_text)
+    if parsed is None:
+        return price_text
+
+    symbol = CURRENCY_SYMBOLS.get(parsed["currency"] or "", "")
+    if not symbol:
+        return price_text
+
+    low, high = parsed["low"], parsed["high"]
+    body = _money(low, symbol) if low == high else f"{_money(low, symbol)} – {_money(high, symbol)}"
+    if low == high and FROM_MARKERS.search(price_text):
+        body = f"от {body}"
+    return body
+
+
+def to_usd(value: float, currency: str | None) -> float | None:
+    """Пересчёт в доллары по курсу из настроек. None — курса для валюты нет."""
+    if currency is None:
+        return None
+    rate = settings.usd_rate_map.get(currency.upper())
+    if not rate:
+        return None
+    return value / rate
+
+
+def usd_label(price: dict) -> str | None:
+    """Подпись «≈ $120» рядом с ценой конкурента. У долларовых цен её нет."""
+    if price.get("currency") in (None, "USD"):
+        return None
+    low = to_usd(price["low"], price.get("currency"))
+    if low is None:
+        return None
+    high = to_usd(price["high"], price.get("currency"))
+    if high and round(high) != round(low):
+        return f"≈ ${round(low):,.0f}–{round(high):,.0f}".replace(",", " ")
+    return f"≈ ${round(low):,.0f}".replace(",", " ")
+
+
+def is_ignored(price_text: str) -> bool:
+    """Цена с рынка, за которым мы не следим, — её не храним и не показываем."""
+    currency = detect_currency(price_text)
+    return currency is not None and currency in settings.ignored_currency_list
+
+
 def market_prices(session: Session) -> list[dict]:
     """Актуальная цена по каждой услуге каждого активного конкурента (кроме нас)."""
     rows = session.execute(
@@ -102,6 +163,8 @@ def market_prices(session: Session) -> list[dict]:
 
     latest: dict[int, dict] = {}
     for competitor, offering, entry in rows:
+        if is_ignored(entry.price_text):
+            continue
         parsed = parse_price(entry.price_text)
         if parsed is None:
             continue
@@ -110,24 +173,41 @@ def market_prices(session: Session) -> list[dict]:
             "domain": competitor.domain,
             "service": offering.name,
             "price_text": entry.price_text,
+            "usd_low": to_usd(parsed["low"], parsed["currency"]),
+            "usd_high": to_usd(parsed["high"], parsed["currency"]),
+            "usd_label": usd_label(parsed),
             **parsed,
         }
     return list(latest.values())
 
 
+PERIOD_TITLES = {
+    "one_time": "Разовая работа",
+    "month": "Подписка, в месяц",
+    "hour": "Почасовая ставка",
+    "project": "За проект",
+}
+
+
 def summary(session: Session) -> dict:
-    """Статистика рынка по валютам."""
+    """Статистика рынка в долларах.
+
+    Раньше цены группировались по валютам, и рядом стояли колонки «UAH» и
+    «USD», которые не сравнить глазами. Теперь всё сводится к доллару, а
+    группировка идёт по смыслу цены: разовая работа, подписка, час.
+    """
     prices = market_prices(session)
-    by_currency: dict[str, list[dict]] = {}
+    by_period: dict[str, list[dict]] = {}
     for item in prices:
-        period = "" if item["period"] == "one_time" else f" / {item['period']}"
-        by_currency.setdefault(f"{item['currency'] or '?'}{period}", []).append(item)
+        if item["usd_low"] is None:
+            continue
+        by_period.setdefault(item["period"], []).append(item)
 
     stats = {}
-    for currency, items in by_currency.items():
-        lows = [i["low"] for i in items]
-        highs = [i["high"] for i in items]
-        stats[currency] = {
+    for period, items in by_period.items():
+        lows = [i["usd_low"] for i in items]
+        highs = [i["usd_high"] or i["usd_low"] for i in items]
+        stats[PERIOD_TITLES.get(period, period)] = {
             "count": len(items),
             "min": min(lows),
             "median_low": statistics.median(lows),
@@ -167,7 +247,9 @@ RECOMMEND_PROMPT = """Ты консультант по ценообразова�
 Правила:
 - Опирайся только на переданные цены, не выдумывай чужие.
 - Если по услуге рыночных данных мало — скажи об этом в rationale.
-- Валюту бери ту, в которой считает рынок в этих данных.
+- Наш прайс предлагай в долларах США: рынок, на который мы смотрим, считает в них.
+  Если цена конкурента дана в другой валюте, так и пиши её в rationale, но нашу
+  цену всё равно называй в долларах.
 """
 
 
@@ -190,10 +272,13 @@ def recommend(session: Session) -> dict:
                 "service": p["service"],
                 "price": p["price_text"],
                 "currency": p["currency"],
+                # Пересчёт даём готовым: иначе модель считает курс сама и врёт.
+                "usd": round(p["usd_low"]) if p["usd_low"] else None,
+                "period": p["period"],
             }
             for p in data["prices"]
         ],
-        "market_stats": data["stats"],
+        "market_stats_usd": data["stats"],
     }
 
     response = client().chat.completions.create(

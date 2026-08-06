@@ -19,7 +19,7 @@ from db.models import (
     ServiceOffering,
     utcnow,
 )
-from services.pricing import parse_price
+from services.pricing import is_ignored, parse_price
 
 
 SIMILARITY_THRESHOLD = 0.75
@@ -224,7 +224,9 @@ def _ingest_services(
                 offering.description = item["description"]
 
         price_text = item.get("price")
-        if not price_text:
+        # Цены с чужих нам рынков не храним вовсе: сравнивать с ними наш прайс
+        # незачем, а в таблицах они только мешают.
+        if not price_text or is_ignored(price_text):
             continue
 
         last_price = session.scalars(

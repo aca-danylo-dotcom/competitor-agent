@@ -11,7 +11,8 @@ from services.ingest import (
     find_similar,
     key_of,
 )
-from services.pricing import parse_price
+from services.discovery import is_ignored_market
+from services.pricing import is_ignored, parse_price
 
 
 def same_service(a: str, b: str) -> bool:
@@ -97,6 +98,26 @@ class PriceParsing(unittest.TestCase):
 
     def test_text_without_numbers(self):
         self.assertIsNone(parse_price("индивидуальная цена"))
+
+
+class IgnoredMarkets(unittest.TestCase):
+    """Рынки, за которыми не следим: рублёвые цены и сайты в их доменных зонах."""
+
+    def test_rouble_prices_are_ignored(self):
+        for text in ("от 4000 руб/мес", "18 000 ₽", "25000 RUB за проект"):
+            with self.subTest(price=text):
+                self.assertTrue(is_ignored(text))
+
+    def test_other_currencies_stay(self):
+        for text in ("from $2,000", "від 15000 грн", "€1500 per project"):
+            with self.subTest(price=text):
+                self.assertFalse(is_ignored(text))
+
+    def test_domain_zones(self):
+        self.assertTrue(is_ignored_market("l7agency.ru"))
+        self.assertTrue(is_ignored_market("example.by"))
+        self.assertFalse(is_ignored_market("ukr-bot.com"))
+        self.assertFalse(is_ignored_market("aetherix.com.ua"))
 
 
 if __name__ == "__main__":

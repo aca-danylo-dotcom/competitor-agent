@@ -1986,3 +1986,48 @@ input[type="url"]:focus {
 /* Кнопки внутри таблицы стоят в формах: без этого каждая форма занимала бы
    свою строку и «Взять» с «Не наш» разъезжались бы по вертикали. */
 .row-actions form { display: inline-flex; margin: 0; }
+
+/* ─── Таблицы, в которые смотрят долго ───
+
+   Списки услуг у крупных агентств — это семь десятков строк, и по такой
+   простыне глаз теряет строку на середине. Здесь к базовой таблице добавлены
+   три вещи: чередование строк, шапка, которая остаётся видимой при прокрутке,
+   и колонка цены, выделенная сильнее остального. */
+.data-grid.tidy tbody tr:nth-child(even) { background: var(--surface); }
+.data-grid.tidy tbody tr:hover { background: var(--accent-soft); }
+
+.data-grid.tidy thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+}
+
+/* Цена — то, ради чего таблицу открывают: держим её у правого края, крупнее
+   остального текста и цифрами одинаковой ширины, чтобы столбик читался
+   сверху вниз как столбик, а не как рваный текст. */
+.data-grid .price-col { text-align: right; white-space: nowrap; }
+.data-grid th.price-col { text-align: right; }
+.price {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Услуга без опубликованной цены. Не прячем: состав услуг тоже сравнивают, —
+   но приглушаем, чтобы строки с ценами читались первыми. */
+.data-grid tbody tr.dim td .strong { font-weight: 500; color: var(--muted); }
+
+/* Строка над таблицей: сколько тут вообще есть цен. Без неё пустая колонка
+   выглядит как поломка панели, хотя это правда о конкуренте. */
+.table-note {
+  margin: -6px 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Длинная таблица прокручивается внутри карточки, а не тянет вниз всю
+   страницу: иначе к меню разделов приходится возвращаться через полэкрана. */
+.table-wrap .data-grid.tidy { display: table; }
+.card.table-wrap { max-height: 78vh; overflow: auto; }

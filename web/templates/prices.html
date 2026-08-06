@@ -19,11 +19,14 @@
     {% for name, stat in stats.items() %}
       <div class="metric">
         <span class="metric-title">{{ name }}</span>
-        <span class="metric-value">{{ stat.median_low | round | int }}</span>
-        <span class="metric-hint">медиана рынка · от {{ stat.min | round | int }} до {{ stat.max | round | int }} · позиций {{ stat.count }}</span>
+        <span class="metric-value">${{ stat.median_low | round | int }}</span>
+        <span class="metric-hint">медиана рынка · от ${{ stat.min | round | int }} до ${{ stat.max | round | int }} · позиций {{ stat.count }}</span>
       </div>
     {% endfor %}
   </div>
+  <p class="table-note">Цены приведены к доллару по курсу из настроек — сравнивать
+    предложения в разных валютах иначе не выйдет. Сами суммы ниже показаны так,
+    как их пишет конкурент.</p>
 {% endif %}
 
 {% if offer %}
@@ -51,13 +54,12 @@
 {% if prices %}
   <div class="card table-wrap">
     <h2>Цены конкурентов</h2>
-    <table class="data-grid">
+    <table class="data-grid tidy">
       <thead>
         <tr>
           <th>Конкурент</th>
           <th>Услуга</th>
-          <th>Цена</th>
-          <th>За что</th>
+          <th class="price-col">Цена</th>
         </tr>
       </thead>
       <tbody>
@@ -65,8 +67,14 @@
           <tr>
             <td><a class="strong" href="/competitors/{{ row.competitor_id }}">{{ row.domain }}</a></td>
             <td>{{ row.service }}</td>
-            <td class="strong">{{ row.price_text }}</td>
-            <td class="muted small">{{ row.period_label }}</td>
+            <td class="price-col">
+              <span class="price">{{ row.price_text }}</span>
+              <span class="muted small">
+                {%- if row.price_usd %}{{ row.price_usd }}{% endif %}
+                {%- if row.price_usd and row.period_label %} · {% endif %}
+                {%- if row.period_label %}{{ row.period_label }}{% endif -%}
+              </span>
+            </td>
           </tr>
         {% endfor %}
       </tbody>

@@ -35,13 +35,13 @@
 
 {% if rows %}
   <div class="card table-wrap">
-    <table class="data-grid">
+    <table class="data-grid tidy">
       <thead>
         <tr>
           <th>Сайт</th>
           <th>Статус</th>
           <th class="num">Услуг</th>
-          <th class="num">Цен</th>
+          <th class="price-col">Цены от</th>
           <th>Проверен</th>
           <th></th>
         </tr>
@@ -60,9 +60,18 @@
                 <span class="tag st-{{ row.status }}">{{ row.status_label }}</span>
               {% endif %}
             </td>
-            <td class="num">{{ row.services }}</td>
-            <td class="num">{{ row.prices or '—' }}</td>
-            <td>{{ row.last_scan or '—' }}</td>
+            <td class="num">{{ row.services or '—' }}</td>
+            <td class="price-col">
+              {% if row.price_from %}
+                <span class="price">{{ row.price_from.text }}</span>
+                {% if row.price_from.usd %}
+                  <span class="muted small">{{ row.price_from.usd }}</span>
+                {% endif %}
+              {% else %}
+                <span class="muted small">по запросу</span>
+              {% endif %}
+            </td>
+            <td class="muted small">{{ row.last_scan or '—' }}</td>
             <td>
               <span class="row-actions">
                 {% if row.status == 'candidate' %}

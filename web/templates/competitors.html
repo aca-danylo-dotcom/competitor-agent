@@ -5,7 +5,9 @@
 <div class="head">
   <div>
     <h1>Конкуренты</h1>
-    <p class="lead">Всего: {{ total }}</p>
+    <p class="lead">
+      {% if last_scan %}Последняя проверка: {{ last_scan }}{% else %}Проверок ещё не было{% endif %}
+    </p>
   </div>
   <div class="head-actions row-actions">
     <form method="post" action="/actions/discover">
@@ -17,21 +19,30 @@
   </div>
 </div>
 
+<div class="metrics">
+  <a class="metric" href="/competitors?status=active">
+    <span class="metric-title">Под наблюдением</span>
+    <span class="metric-value">{{ metrics.active }}</span>
+    <span class="metric-hint">проверяем регулярно</span>
+  </a>
+  <a class="metric" href="/competitors?status=candidate">
+    <span class="metric-title">Ждут решения</span>
+    <span class="metric-value">{{ metrics.candidates }}</span>
+    <span class="metric-hint">найдены поиском, нужен ваш взгляд</span>
+  </a>
+  <a class="metric" href="/changes">
+    <span class="metric-title">Изменений за неделю</span>
+    <span class="metric-value">{{ metrics.changes_week }}</span>
+    <span class="metric-hint">новые услуги, цены и акции</span>
+  </a>
+</div>
+
 <nav class="tabs">
   <a href="/competitors" {% if not status %}class="on"{% endif %}>Все</a>
   <a href="/competitors?status=active" {% if status == 'active' %}class="on"{% endif %}>Под наблюдением</a>
   <a href="/competitors?status=candidate" {% if status == 'candidate' %}class="on"{% endif %}>Ждут решения</a>
   <a href="/competitors?status=rejected" {% if status == 'rejected' %}class="on"{% endif %}>Отклонённые</a>
 </nav>
-
-<div class="card">
-  <h2>Добавить сайт вручную</h2>
-  <form class="filters" method="post" action="/competitors/add">
-    <input type="url" name="url" placeholder="https://example.com/" required>
-    <input type="text" name="name" placeholder="Название (необязательно)">
-    <button class="btn" type="submit">Добавить</button>
-  </form>
-</div>
 
 {% if rows %}
   <div class="card table-wrap">
@@ -96,8 +107,15 @@
 {% else %}
   <div class="card empty-state">
     <p>Здесь пока пусто.</p>
-    <p class="muted">Нажмите «Найти конкурентов» — агент поищет их по ключевым запросам,
-      или добавьте сайт вручную формой выше.</p>
+    <p class="muted">Нажмите «Найти конкурентов» — агент поищет их по ключевым запросам.</p>
   </div>
 {% endif %}
+
+{# Ручное добавление нужно редко: обычно сайты приходят поиском. Поэтому форма
+   стоит под таблицей одной строкой, а не отдельной карточкой наверху. #}
+<form class="add-row" method="post" action="/competitors/add">
+  <input type="url" name="url" placeholder="https://сайт-конкурента.com/" required>
+  <input type="text" name="name" placeholder="Название (необязательно)">
+  <button class="btn" type="submit">Добавить вручную</button>
+</form>
 {% endblock %}

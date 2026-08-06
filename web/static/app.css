@@ -2031,3 +2031,15 @@ input[type="url"]:focus {
    страницу: иначе к меню разделов приходится возвращаться через полэкрана. */
 .table-wrap .data-grid.tidy { display: table; }
 .card.table-wrap { max-height: 78vh; overflow: auto; }
+
+/* Ручное добавление сайта — строка под таблицей, а не карточка наверху:
+   основной путь пополнения списка это поиск, а не ввод адреса руками. */
+.add-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: -6px;
+}
+.add-row input[type="url"] { flex: 2 1 280px; width: auto; }
+.add-row input[type="text"] { flex: 1 1 180px; width: auto; }

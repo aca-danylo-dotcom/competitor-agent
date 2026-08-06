@@ -103,17 +103,6 @@
       {% endif %}
     </div>
 
-    {% if review %}
-      <div class="card">
-        <h2>Репутация</h2>
-        <p class="pairs">
-          {% if review.rating %}<span class="small muted">Рейтинг</span> {{ review.rating }}<br>{% endif %}
-          {% if review.reviews_count %}<span class="small muted">Отзывов</span> {{ review.reviews_count }}<br>{% endif %}
-          {% if review.portfolio_size %}<span class="small muted">Проектов</span> {{ review.portfolio_size }}{% endif %}
-        </p>
-      </div>
-    {% endif %}
-
     <div class="card">
       <h2>Что менялось</h2>
       {% if changes %}
@@ -133,16 +122,6 @@
       {% endif %}
     </div>
 
-    {% if pages %}
-      <div class="card">
-        <h2>Какие страницы смотрим</h2>
-        <p class="links">
-          {% for page in pages %}
-            <a href="{{ page }}" target="_blank" rel="noopener">{{ page }}</a><br>
-          {% endfor %}
-        </p>
-      </div>
-    {% endif %}
   </div>
 </div>
 {% endblock %}

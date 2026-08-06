@@ -27,7 +27,6 @@ from db.models import (
     PageSnapshot,
     PriceEntry,
     Promotion,
-    Review,
     ServiceOffering,
     utcnow,
 )
@@ -122,10 +121,13 @@ def _cheapest_price(session, competitor_id: int) -> dict | None:
 
 
 def _nav(active: str) -> list[dict]:
-    """Разделы панели. Значки — те же контурные, что в CRM."""
+    """Разделы панели. Значки — те же контурные, что в CRM.
+
+    Разделов три. Сводка была четвёртым и не показывала ничего своего:
+    те же изменения, что в журнале, и те же кандидаты, что в списке.
+    """
     items = [
-        ("summary", "/", "Сводка", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>'),
-        ("competitors", "/competitors", "Конкуренты", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 6.5a3 3 0 0 1 0 5.6"/><path d="M17.5 19.5c0-2.3-1-4-2.6-4.9"/></svg>'),
+        ("competitors", "/", "Конкуренты", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 6.5a3 3 0 0 1 0 5.6"/><path d="M17.5 19.5c0-2.3-1-4-2.6-4.9"/></svg>'),
         ("changes", "/changes", "Изменения", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>'),
         ("prices", "/prices", "Цены", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.1-4.5 3 2 2.6 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3"/></svg>'),
     ]
@@ -168,63 +170,6 @@ def _run_in_background(work, *args) -> bool:
 
 
 @router.get("/", response_class=HTMLResponse)
-def summary(request: Request):
-    with SessionLocal() as session:
-        week_ago = utcnow().replace(tzinfo=None) - dt.timedelta(days=7)
-        metrics = {
-            "active": session.scalar(
-                select(func.count(Competitor.id)).where(
-                    Competitor.status == "active", Competitor.is_own.is_(False)
-                )
-            ),
-            "candidates": session.scalar(
-                select(func.count(Competitor.id)).where(Competitor.status == "candidate")
-            ),
-            "changes_week": session.scalar(
-                select(func.count(ChangeLog.id)).where(ChangeLog.captured_at >= week_ago)
-            ),
-            "prices": session.scalar(select(func.count(PriceEntry.id))),
-        }
-
-        changes = [
-            {
-                "competitor_id": competitor.id,
-                "domain": competitor.domain,
-                "description": change.description,
-                "change_type": change.change_type,
-                "type_label": CHANGE_LABELS.get(change.change_type, change.change_type),
-            }
-            for change, competitor in session.execute(
-                select(ChangeLog, Competitor)
-                .join(Competitor, ChangeLog.competitor_id == Competitor.id)
-                .order_by(ChangeLog.captured_at.desc())
-                .limit(8)
-            ).all()
-        ]
-
-        candidates = [
-            {"id": c.id, "domain": c.domain, "name": c.name, "url": c.url}
-            for c in session.scalars(
-                select(Competitor)
-                .where(Competitor.status == "candidate")
-                .order_by(Competitor.discovered_at.desc())
-                .limit(6)
-            ).all()
-        ]
-
-        last = session.scalar(select(func.max(PageSnapshot.captured_at)))
-
-    return _page(
-        request,
-        "summary.html",
-        "summary",
-        metrics=metrics,
-        changes=changes,
-        candidates=candidates,
-        last_scan=_fmt(last),
-    )
-
-
 @router.get("/competitors", response_class=HTMLResponse)
 def competitors(request: Request, status: str | None = None):
     with SessionLocal() as session:
@@ -261,14 +206,29 @@ def competitors(request: Request, status: str | None = None):
                 }
             )
 
-        total = session.scalar(select(func.count(Competitor.id)))
+        week_ago = utcnow().replace(tzinfo=None) - dt.timedelta(days=7)
+        metrics = {
+            "active": session.scalar(
+                select(func.count(Competitor.id)).where(
+                    Competitor.status == "active", Competitor.is_own.is_(False)
+                )
+            ),
+            "candidates": session.scalar(
+                select(func.count(Competitor.id)).where(Competitor.status == "candidate")
+            ),
+            "changes_week": session.scalar(
+                select(func.count(ChangeLog.id)).where(ChangeLog.captured_at >= week_ago)
+            ),
+        }
+        last = session.scalar(select(func.max(PageSnapshot.captured_at)))
 
     return _page(
         request,
         "competitors.html",
         "competitors",
         rows=rows,
-        total=total,
+        metrics=metrics,
+        last_scan=_fmt(last),
         status=status if status in STATUS_LABELS else None,
     )
 
@@ -323,13 +283,6 @@ def competitor_card(request: Request, competitor_id: int):
             ).all()
         ]
 
-        review = session.scalars(
-            select(Review)
-            .where(Review.competitor_id == competitor_id)
-            .order_by(Review.captured_at.desc())
-            .limit(1)
-        ).first()
-
         changes = [
             {
                 "change_type": change.change_type,
@@ -350,17 +303,6 @@ def competitor_card(request: Request, competitor_id: int):
                 PageSnapshot.competitor_id == competitor_id
             )
         )
-        pages = list(
-            session.scalars(
-                select(PageSnapshot.url)
-                .where(
-                    PageSnapshot.competitor_id == competitor_id,
-                    PageSnapshot.captured_at == last,
-                )
-                .distinct()
-            ).all()
-        )
-
         positioning = None
         snapshot = session.scalars(
             select(PageSnapshot)
@@ -395,9 +337,7 @@ def competitor_card(request: Request, competitor_id: int):
         services=services,
         priced=priced,
         promotions=promotions,
-        review=review,
         changes=changes,
-        pages=pages,
         positioning=positioning,
         last_scan=_fmt(last),
     )

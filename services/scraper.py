@@ -75,19 +75,58 @@ PRICE_IN_TEXT = re.compile(
 )
 
 
-def has_price(text: str) -> bool:
-    """Есть ли на странице настоящая цена.
+# Слова, рядом с которыми сумма означает «столько это стоит».
+# Намеренно без «cost», «save» и одинокого «from»: в статьях сплошь «cost savings
+# of $2 million» и «from $1B to $2B», и по ним прайсом выглядел каждый разбор.
+PRICE_MARKERS = re.compile(
+    r"(price|pricing|payment|one[- ]time|per month|per year|per hour|per project|"
+    r"/mo\b|/month|monthly|starting at|starts at|from just|"
+    # «Plans from $2,000» — цена, а «production planning» — нет: слово «plan»
+    # засчитывается только вместе с «from» или «start».
+    r"plans?\s+(?:from|start)|plans?\s+starting|tariff|"
+    r"buy|order now|add to cart|checkout|subscribe|enroll|get started|get access|get instant|"
+    r"цена|цены|стоимост|тариф|пакет|купить|заказать|оплат|"
+    r"ціна|ціни|вартіст|від|замовити|тарифн)",
+    re.IGNORECASE,
+)
 
-    Нули не в счёт: на страницах оплаты и в пустых корзинах стоит «$0.00», и
-    без этой проверки такая страница выглядела бы прайсом.
+# Рыночная статистика из статей: «$50 billion market», «$1.2M raised».
+MARKET_SCALE = re.compile(r"^(billion|million|trillion|bn|m\b|k\b|млрд|млн|тис|тыс)", re.IGNORECASE)
+
+# Разметка товара: сайт объявляет цену машиночитаемо. Значение обязано быть
+# числом: у одного из конкурентов в настройках форм лежит «"price":false», и по
+# такому признаку прайсом выглядела каждая статья на сайте.
+STRUCTURED_PRICE = re.compile(
+    r"(\"price\"\s*:\s*\"?[1-9]|itemprop=[\"']price[\"'][^>]*content=[\"'][1-9]|"
+    r"property=[\"']product:price)",
+    re.IGNORECASE,
+)
+
+
+def has_price(text: str, html: str = "") -> bool:
+    """Есть ли на странице цена услуги, а не любое число рядом с валютой.
+
+    Три ловушки, из-за которых простого поиска валюты мало: «$0.00» на страницах
+    оплаты, «$50 billion market» в маркетинговых статьях и суммы инвестиций в
+    кейсах. Поэтому сумма засчитывается, только если рядом стоит слово про цену
+    или покупку — либо сайт объявил цену разметкой товара.
     """
+    if html and STRUCTURED_PRICE.search(html):
+        return True
+
     for match in PRICE_IN_TEXT.finditer(text):
         raw = (match.group(1) or match.group(2) or "").replace(" ", "").replace(",", "")
         try:
-            if float(raw.rstrip(".")) >= 1:
-                return True
+            if float(raw.rstrip(".")) < 1:
+                continue
         except ValueError:
             continue
+
+        if MARKET_SCALE.match(text[match.end() : match.end() + 12].strip()):
+            continue
+        if PRICE_MARKERS.search(text[max(0, match.start() - 60) : match.end() + 60]):
+            return True
+
     return False
 
 
@@ -267,7 +306,7 @@ def crawl(
         # SPA отдаёт главную на любой путь — такую страницу за находку не считаем.
         if not text or text == base_text:
             continue
-        if has_price(text):
+        if has_price(text, page_html):
             found.append((final_url, page_html))
 
     return found
@@ -284,7 +323,7 @@ def probe(urls: list[str], base_text: str, want: int, budget: int) -> list[tuple
         except requests.RequestException:
             continue
         text = html_to_text(html)
-        if text and text != base_text and has_price(text):
+        if text and text != base_text and has_price(text, html):
             found.append((final_url, html))
     return found
 

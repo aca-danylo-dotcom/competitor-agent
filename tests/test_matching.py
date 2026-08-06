@@ -124,6 +124,21 @@ class PriceOnPage(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertFalse(scraper.has_price(text))
 
+    def test_ignores_numbers_that_are_not_prices(self):
+        """Статьи полны сумм, которые ценой не являются, — они сбивали обход."""
+        for text in (
+            "The AI market will reach $50 billion by 2030",
+            "The startup raised $1.2M in seed funding",
+            "Total: $0.00",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(scraper.has_price(text))
+
+    def test_product_markup_counts_as_price(self):
+        self.assertTrue(
+            scraper.has_price("текста с числами нет", '{"@type":"Product","offers":{"price":49}}')
+        )
+
 
 class IgnoredMarkets(unittest.TestCase):
     """Рынки, за которыми не следим: рублёвые цены и сайты в их доменных зонах."""

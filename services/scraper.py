@@ -8,6 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
+from config import settings
 from db.models import Competitor, PageSnapshot
 
 REQUEST_TIMEOUT = 30
@@ -55,23 +56,39 @@ OFFER_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# Страницы, где цен не бывает: их не пробуем вовсе, чтобы не жечь запросы.
+# Страницы, которые смотреть незачем. Кроме заведомо пустых разделов сюда
+# входят две ловушки: статьи блога, где стоят цены чужих компаний, и служебные
+# страницы оплаты, где сумма нулевая или чья-то чужая.
 SKIP_PATTERNS = re.compile(
-    r"(/blog|/news|/article|/careers|/jobs|/vacan|/privacy|/terms|/policy|/cookie|"
-    r"/about|/team|/contact|/login|/signin|/signup|/cart|/faq|\.pdf$|\.jpg$|\.png$)",
+    r"(/blog|/post|/news|/article|/careers|/jobs|/vacan|/privacy|/terms|/policy|/cookie|"
+    r"/about|/team|/contact|/login|/signin|/signup|/cart|/faq|/checkout|/paypal|"
+    r"/order-|/thank|/thanks|/confirmation|/success|/invoice|/receipt|/account|"
+    r"\.pdf$|\.jpg$|\.png$)",
     re.IGNORECASE,
 )
 
 # Признак того, что на странице есть деньги: символ валюты или код рядом с числом.
+# Символ валюты встречается и перед числом («$49»), и после него («25 000 ₴»).
 PRICE_IN_TEXT = re.compile(
-    r"(?:[$€£₴₽]\s?\d|\d\s?(?:USD|EUR|GBP|UAH|PLN|грн|₴|\$))",
+    r"(?:[$€£₴₽]\s?(\d[\d\s.,]*)|(\d[\d\s.,]*)\s?(?:USD|EUR|GBP|UAH|PLN|грн|[$€£₴₽]))",
     re.IGNORECASE,
 )
 
 
 def has_price(text: str) -> bool:
-    """Есть ли на странице цена. Дешёвая проверка до обращения к модели."""
-    return bool(PRICE_IN_TEXT.search(text))
+    """Есть ли на странице настоящая цена.
+
+    Нули не в счёт: на страницах оплаты и в пустых корзинах стоит «$0.00», и
+    без этой проверки такая страница выглядела бы прайсом.
+    """
+    for match in PRICE_IN_TEXT.finditer(text):
+        raw = (match.group(1) or match.group(2) or "").replace(" ", "").replace(",", "")
+        try:
+            if float(raw.rstrip(".")) >= 1:
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _is_price_link(url: str, label: str) -> bool:
@@ -156,62 +173,137 @@ def find_subpages(html: str, base_url: str, limit: int = 2) -> list[str]:
     return candidates(html, base_url)[:limit]
 
 
-def probe(
-    urls: list[str],
-    base_text: str,
-    want: int,
-    budget: int,
-    time_budget: float = PROBE_TIME_BUDGET,
-) -> list[tuple[str, str]]:
-    """Обходит кандидатов и возвращает те страницы, где действительно есть цена.
+def sitemap_urls(base_url: str, limit: int = 500) -> list[str]:
+    """Адреса из карты сайта — список страниц, который сайт публикует сам.
 
-    Скачать страницу дёшево, спросить модель — нет. Поэтому сначала ищем деньги
-    простым поиском по тексту и только найденное отдаём дальше.
-
-    Два ограничителя: число запросов и общее время. Второе важнее — тяжёлый сайт
-    отвечает по десять секунд на страницу и в одиночку задерживает весь прогон.
+    Это надёжнее ссылок с главной: в меню выносят не всё, а карточка услуги с
+    ценой может быть доступна только из каталога или вообще из поиска.
     """
+    root = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}"
+    found: list[str] = []
+    queue = [root + "/sitemap.xml", root + "/sitemap_index.xml"]
+    seen_maps: set[str] = set()
+
+    while queue and len(found) < limit:
+        target = queue.pop(0)
+        if target in seen_maps:
+            continue
+        seen_maps.add(target)
+        try:
+            resp = requests.get(target, headers=HEADERS, timeout=PROBE_TIMEOUT)
+        except requests.RequestException:
+            continue
+        if resp.status_code != 200 or "<" not in resp.text[:200]:
+            continue
+
+        locations = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", resp.text, re.IGNORECASE)
+        for loc in locations:
+            # Карта может ссылаться на другие карты — их тоже разбираем.
+            if loc.endswith(".xml") and len(seen_maps) < 12:
+                queue.append(loc)
+            elif urlparse(loc).netloc == urlparse(base_url).netloc:
+                found.append(loc.split("#")[0].rstrip("/"))
+
+    return found[:limit]
+
+
+def _rank(url: str) -> int:
+    """Чем раньше открыть страницу. Меньше — важнее."""
+    if _is_price_link(url, ""):
+        return 0
+    if OFFER_PATTERNS.search(url):
+        return 1
+    if AI_PATTERNS.search(url):
+        return 2
+    if SERVICE_PATTERNS.search(url):
+        return 3
+    return 4
+
+
+def crawl(
+    base_url: str,
+    html: str,
+    page_limit: int | None = None,
+    time_budget: float | None = None,
+) -> list[tuple[str, str]]:
+    """Обходит сайт и возвращает все страницы, на которых есть цены.
+
+    Порядок обхода — от вероятного к остальному, но перебираются в итоге все
+    страницы, до которых успеваем дотянуться. Проверка «есть ли деньги» идёт
+    простым поиском по тексту: скачать страницу дёшево, спросить модель — нет.
+    """
+    page_limit = page_limit or settings.crawl_page_limit
+    time_budget = time_budget or settings.crawl_time_budget
+
+    base_text = html_to_text(html)
+    base_host = urlparse(base_url).netloc.lower()
+
+    urls = candidates(html, base_url)
+    known = set(urls) | {base_url.rstrip("/")}
+    for url in sitemap_urls(base_url):
+        if url not in known and not SKIP_PATTERNS.search(url):
+            known.add(url)
+            urls.append(url)
+
+    urls.sort(key=_rank)
+
     found: list[tuple[str, str]] = []
-    spent = 0
+    visited = 0
     deadline = time.monotonic() + time_budget
 
     for url in urls:
-        if len(found) >= want or spent >= budget or time.monotonic() > deadline:
+        if visited >= page_limit or time.monotonic() > deadline:
             break
-        spent += 1
+        if urlparse(url).netloc.lower() != base_host:
+            continue
+        visited += 1
         try:
-            # Проб много, и каждая может уйти в долгое ожидание. Медленную
-            # страницу дешевле бросить: цена, скорее всего, найдётся на другой.
-            final_url, html = fetch(url, timeout=PROBE_TIMEOUT)
+            # Страниц много, и каждая может уйти в долгое ожидание. Медленную
+            # дешевле бросить: цена, скорее всего, найдётся на другой.
+            final_url, page_html = fetch(url, timeout=PROBE_TIMEOUT)
         except requests.RequestException:
             continue
-        text = html_to_text(html)
+        text = html_to_text(page_html)
         # SPA отдаёт главную на любой путь — такую страницу за находку не считаем.
         if not text or text == base_text:
             continue
         if has_price(text):
-            found.append((final_url, html))
+            found.append((final_url, page_html))
 
     return found
 
 
-def capture(
-    session: Session, competitor: Competitor, max_pages: int = 3, probe_budget: int = 8
-) -> list[PageSnapshot]:
-    """Скачивает главную и страницы, где нашлись цены; иначе — профильные услуги."""
+def probe(urls: list[str], base_text: str, want: int, budget: int) -> list[tuple[str, str]]:
+    """Старый точечный вариант обхода — оставлен для тестов и разовых проверок."""
+    found: list[tuple[str, str]] = []
+    for url in urls[:budget]:
+        if len(found) >= want:
+            break
+        try:
+            final_url, html = fetch(url, timeout=PROBE_TIMEOUT)
+        except requests.RequestException:
+            continue
+        text = html_to_text(html)
+        if text and text != base_text and has_price(text):
+            found.append((final_url, html))
+    return found
+
+
+def capture(session: Session, competitor: Competitor, max_pages: int = 3) -> list[PageSnapshot]:
+    """Обходит сайт и сохраняет главную вместе со всеми страницами, где есть цены.
+
+    max_pages задаёт, сколько страниц брать, если цен не нашлось нигде: тогда
+    смотрим профильные разделы, чтобы собрать хотя бы состав услуг.
+    """
     final_url, html = fetch(competitor.url)
-    base_text = html_to_text(html)
     pages = [(final_url, html)]
 
-    urls = candidates(html, final_url)
-    priced = probe(urls, base_text, want=max_pages - 1, budget=probe_budget)
-    pages.extend(priced)
+    priced = crawl(final_url, html)
+    pages.extend(priced[: settings.price_pages_limit])
 
-    # Цен не нашлось нигде — берём профильные страницы, чтобы хотя бы собрать
-    # состав услуг: сравнивать конкурентов можно и без прайса.
     if not priced:
         taken = {url for url, _ in pages}
-        for url in urls:
+        for url in candidates(html, final_url):
             if len(pages) >= max_pages:
                 break
             if url in taken:

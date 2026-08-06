@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 *.db
 *.db-journal
+web/last_pricing.json

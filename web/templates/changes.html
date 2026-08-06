@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Изменения · Конкуренты{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Изменения</h1>
+    <p class="lead">За {{ days }} дн.: {{ rows | length }}</p>
+  </div>
+  <div class="head-actions row-actions">
+    <form method="post" action="/actions/scan">
+      <button class="btn primary" type="submit">Проверить всех</button>
+    </form>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a href="/changes?days=7" {% if days == 7 %}class="on"{% endif %}>Неделя</a>
+  <a href="/changes?days=30" {% if days == 30 %}class="on"{% endif %}>Месяц</a>
+  <a href="/changes?days=365" {% if days == 365 %}class="on"{% endif %}>Всё время</a>
+</nav>
+
+{% if rows %}
+  <div class="card table-wrap">
+    <table class="data-grid">
+      <thead>
+        <tr>
+          <th>Когда</th>
+          <th>Конкурент</th>
+          <th>Что</th>
+          <th>Подробности</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="muted small">{{ row.captured_at }}</td>
+            <td><a class="strong" href="/competitors/{{ row.competitor_id }}">{{ row.domain }}</a></td>
+            <td><span class="tag ch-{{ row.change_type }}">{{ row.type_label }}</span></td>
+            <td>{{ row.description }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <p>За этот срок ничего не менялось.</p>
+    <p class="muted">Изменения находятся при повторной проверке сайта: первая лишь запоминает
+      исходное состояние, а сравнивать его есть с чем только со второго раза.</p>
+  </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Конкуренты{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Конкуренты</h1>
+    <p class="lead">Всего: {{ total }}</p>
+  </div>
+  <div class="head-actions row-actions">
+    <form method="post" action="/actions/discover">
+      <button class="btn" type="submit">Найти конкурентов</button>
+    </form>
+    <form method="post" action="/actions/scan">
+      <button class="btn primary" type="submit">Проверить всех</button>
+    </form>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a href="/competitors" {% if not status %}class="on"{% endif %}>Все</a>
+  <a href="/competitors?status=active" {% if status == 'active' %}class="on"{% endif %}>Под наблюдением</a>
+  <a href="/competitors?status=candidate" {% if status == 'candidate' %}class="on"{% endif %}>Ждут решения</a>
+  <a href="/competitors?status=rejected" {% if status == 'rejected' %}class="on"{% endif %}>Отклонённые</a>
+</nav>
+
+<div class="card">
+  <h2>Добавить сайт вручную</h2>
+  <form class="filters" method="post" action="/competitors/add">
+    <input type="url" name="url" placeholder="https://example.com/" required>
+    <input type="text" name="name" placeholder="Название (необязательно)">
+    <button class="btn" type="submit">Добавить</button>
+  </form>
+</div>
+
+{% if rows %}
+  <div class="card table-wrap">
+    <table class="data-grid">
+      <thead>
+        <tr>
+          <th>Сайт</th>
+          <th>Статус</th>
+          <th class="num">Услуг</th>
+          <th class="num">Цен</th>
+          <th>Проверен</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>
+              <a class="strong" href="/competitors/{{ row.id }}">{{ row.domain }}</a>
+              <span class="muted small">{{ row.name[:60] }}</span>
+            </td>
+            <td>
+              {% if row.is_own %}
+                <span class="tag st-own">Наш сайт</span>
+              {% else %}
+                <span class="tag st-{{ row.status }}">{{ row.status_label }}</span>
+              {% endif %}
+            </td>
+            <td class="num">{{ row.services }}</td>
+            <td class="num">{{ row.prices or '—' }}</td>
+            <td>{{ row.last_scan or '—' }}</td>
+            <td>
+              <span class="row-actions">
+                {% if row.status == 'candidate' %}
+                  <form method="post" action="/competitors/{{ row.id }}/approve">
+                    <button class="btn small" type="submit">Взять</button>
+                  </form>
+                  <form method="post" action="/competitors/{{ row.id }}/reject">
+                    <button class="btn small danger-btn" type="submit">Не наш</button>
+                  </form>
+                {% else %}
+                  <form method="post" action="/competitors/{{ row.id }}/scan">
+                    <button class="btn small" type="submit">Проверить</button>
+                  </form>
+                {% endif %}
+              </span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <p>Здесь пока пусто.</p>
+    <p class="muted">Нажмите «Найти конкурентов» — агент поищет их по ключевым запросам,
+      или добавьте сайт вручную формой выше.</p>
+  </div>
+{% endif %}
+{% endblock %}

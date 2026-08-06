@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}{{ competitor.domain }} · Конкуренты{% endblock %}
+
+{% block content %}
+<p class="back"><a href="/competitors">← Все конкуренты</a></p>
+
+<div class="head">
+  <div>
+    <h1>{{ competitor.name }}</h1>
+    <p class="lead">
+      <a href="{{ competitor.url }}" target="_blank" rel="noopener">{{ competitor.domain }}</a>
+      · {% if competitor.is_own %}наш сайт{% else %}{{ status_label }}{% endif %}
+      {% if last_scan %} · проверен {{ last_scan }}{% endif %}
+    </p>
+  </div>
+  <div class="head-actions row-actions">
+    {% if competitor.status == 'candidate' %}
+      <form method="post" action="/competitors/{{ competitor.id }}/approve">
+        <button class="btn primary" type="submit">Взять под наблюдение</button>
+      </form>
+      <form method="post" action="/competitors/{{ competitor.id }}/reject">
+        <button class="btn danger-btn" type="submit">Не наш конкурент</button>
+      </form>
+    {% else %}
+      <form method="post" action="/competitors/{{ competitor.id }}/scan">
+        <button class="btn primary" type="submit">Проверить сейчас</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if positioning %}
+  <div class="card">
+    <h2>Как себя подают</h2>
+    <p>{{ positioning }}</p>
+  </div>
+{% endif %}
+
+<div class="split">
+  <div class="card table-wrap">
+    <h2>Услуги и цены</h2>
+    {% if services %}
+      <table class="data-grid">
+        <thead>
+          <tr>
+            <th>Услуга</th>
+            <th>Цена</th>
+            <th>Замечена</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for service in services %}
+            <tr>
+              <td>
+                <span class="strong">{{ service.name }}</span>
+                {% if service.description %}
+                  <span class="muted small">{{ service.description[:110] }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if service.price %}
+                  {{ service.price }}
+                  {% if service.old_price %}
+                    <span class="muted small strike">{{ service.old_price }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="muted small">не указана</span>
+                {% endif %}
+              </td>
+              <td class="muted small">{{ service.first_seen }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Услуги ещё не собраны — нажмите «Проверить сейчас».</p>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Акции</h2>
+      {% if promotions %}
+        <ul class="timeline">
+          {% for promo in promotions %}
+            <li class="done">
+              <span>{{ promo.description }}</span>
+              <span class="muted small">{{ promo.captured_at }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Действующих акций не нашли.</p>
+      {% endif %}
+    </div>
+
+    {% if review %}
+      <div class="card">
+        <h2>Репутация</h2>
+        <p class="pairs">
+          {% if review.rating %}<span class="small muted">Рейтинг</span> {{ review.rating }}<br>{% endif %}
+          {% if review.reviews_count %}<span class="small muted">Отзывов</span> {{ review.reviews_count }}<br>{% endif %}
+          {% if review.portfolio_size %}<span class="small muted">Проектов</span> {{ review.portfolio_size }}{% endif %}
+        </p>
+      </div>
+    {% endif %}
+
+    <div class="card">
+      <h2>Что менялось</h2>
+      {% if changes %}
+        <ul class="timeline">
+          {% for change in changes %}
+            <li class="done">
+              <span>
+                <span class="tag ch-{{ change.change_type }}">{{ change.type_label }}</span>
+                <span class="muted small">{{ change.description }}</span>
+              </span>
+              <span class="muted small">{{ change.captured_at }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Изменений пока не было.</p>
+      {% endif %}
+    </div>
+
+    {% if pages %}
+      <div class="card">
+        <h2>Какие страницы смотрим</h2>
+        <p class="links">
+          {% for page in pages %}
+            <a href="{{ page }}" target="_blank" rel="noopener">{{ page }}</a><br>
+          {% endfor %}
+        </p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

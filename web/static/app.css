@@ -1,0 +1,1988 @@
+/* Оформление панели мониторинга конкурентов.
+
+   Файл перенесён из CRM sales-bot (web/frontend/src/styles/app.css) без правки
+   вёрстки: у двух панелей один владелец и один вид. Убраны только подключения
+   Tailwind, которых здесь нет, и тёмная тема — эта панель светлая. Хвост файла
+   (competitor-agent) дополняет перенос тем, чего в CRM не было. */
+
+/* Оформление панели: спокойный «эпловский» вид — много воздуха, системный
+   шрифт, крупные скругления, тонкие светлые линии вместо рамок и теней.
+
+   Тем две — светлая и тёмная, переключаются кнопкой в шапке (см.
+   components/theme-switch.tsx). По настройкам системы панель НЕ темнеет сама:
+   светлая остаётся видом по умолчанию, тёмную включает человек и она
+   запоминается. Тёмные значения собраны в одном месте — в блоке `.dark`
+   ближе к концу файла; правила выше цвета не знают, они берут переменные.
+
+   Файл переехал сюда из web/static/style.css при переводе панели на React —
+   почти без изменений. Дизайн менять было не нужно, а переписывать семь сотен
+   строк на утилиты Tailwind значит на ровном месте рисковать вёрсткой, которая
+   уже работает. Tailwind подключён поверх и применяется только к новому. */
+
+/* Появление выпадающего списка. Компоненты реестра описывают его классами
+   вроде `data-entering:animate-in`, а сами эти классы живут здесь. */
+
+
+:root {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --line: #e8e8ed;
+  --text: #1d1d1f;
+  --muted: #86868b;
+  --accent: #5227ff;
+  --accent-soft: #efeaff;
+  /* Обводка плашки, по которой можно перейти. Разбавленный акцент, а не он
+     сам: рамка идёт по всему периметру, и полная насыщенность на белой
+     карточке читается как ошибка, а не как «сюда можно нажать». */
+  --accent-line: #9d82ff;
+  /* Тёмный конец палитры — для текста на светлой подложке: сам акцент на
+     `--accent-soft` даёт всего 4.9:1, а надписи в плашках мелкие. */
+  --accent-deep: #3a12c4;
+  /* Градиент палитры целиком — для картинок: столбиков, воронки, круга. Текста
+     на них нет, поэтому светлый розовый конец ничему не мешает. */
+  --accent-gradient: linear-gradient(90deg, #5227ff 0%, #b497cf 55%, #ff9ffc 100%);
+  /* Тот же переход, обрезанный там, где белая надпись ещё читается: на #b497cf
+     контраст падает до 2.5:1, на #ff9ffc — до 1.8:1, это уже нечитаемо.
+     Поэтому кнопки и текущий раздел меню берут короткий вариант. */
+  --accent-gradient-solid: linear-gradient(90deg, #5227ff 0%, #7b5cf0 100%);
+  --danger: #d70015;
+  --ok: #1d9d5c;
+  --radius: 18px;
+
+  /* Заливки и подложки. Раньше эти же оттенки стояли числами прямо в правилах,
+     и тёмная тема потребовала бы переписать каждое из шести десятков мест.
+     Теперь у каждой заливки есть имя по её роли, а не по цвету: `--fill` —
+     мягкая плашка (тег, заметка, реплика в переписке), `--fill-strong` —
+     кнопка, `--surface` — подложка под числами. */
+  --fill: #f0f0f3;
+  --fill-hover: #e2e2e7;
+  --fill-strong: #e8e8ed;
+  --fill-strong-hover: #dcdce1;
+  --surface: #f5f5f7;
+  --surface-hover: #ececf0;
+  --row-hover: #fafafc;
+  --input-bg: #ffffff;
+  --line-hover: #d6d6dc;
+  /* Текст на акцентной заливке и на чёрной пилюле выбранной вкладки. В тёмной
+     теме он не белый — там сама пилюля светлая. */
+  --on-solid: #ffffff;
+  --solid: var(--text);
+  --solid-hover: #000000;
+  /* Тусклая точка: будущие шаги в пути заказа, отметки на ленте отмен,
+     заглушка вместо снимка. */
+  --dot: #c7c7cc;
+  --topbar-bg: rgba(255, 255, 255, 0.82);
+  --dock-bg: rgba(240, 240, 244, 0.9);
+  --dock-cell-bg: #ffffff;
+  --icon-tile: #f0ebfe;
+  /* Белая плашка под подписями воронки: она лежит прямо на цветной заливке,
+     поэтому цвет у неё свой, а не общий с карточками. */
+  --plate: rgba(255, 255, 255, 0.92);
+  --plate-text: #4b4854;
+  --shadow-soft: 0 1px 2px rgba(20, 26, 60, 0.06);
+  --shadow-drop:
+    0 1px 2px rgba(20, 26, 60, 0.06),
+    0 12px 32px rgba(20, 26, 60, 0.14);
+  --shadow-toast: 0 8px 30px rgba(0, 0, 0, 0.16);
+  --shadow-toast-hover: 0 10px 34px rgba(0, 0, 0, 0.2);
+  --stats-shadow: 0 1px 2px rgba(20, 26, 60, 0.05), 0 10px 26px rgba(20, 26, 60, 0.06);
+  --stat-border: #edeef4;
+  --stat-hover-bg: #fafbff;
+  --stat-hover-border: #dde1ee;
+
+  /* Пастельные плашки статусов и сообщений. Пары «фон + надпись» держатся
+     вместе: в тёмной теме светлый пастельный фон становится глухим тёмным, и
+     чёрная надпись на нём пропала бы. */
+  --tag-warn-bg: #fdf3e3;
+  --tag-warn-fg: #8a6100;
+  --tag-hot-bg: #ffe9e5;
+  --tag-hot-fg: #c0392b;
+  --tag-ship-bg: #ece9fd;
+  --tag-ship-fg: #4c3fbe;
+  --tag-ok-bg: #e6f6ed;
+  --flash-warn-bg: #fff6e8;
+  --flash-warn-fg: #8a5a00;
+  --flash-err-bg: #fff4f4;
+  --danger-soft: #fff0f0;
+  /* Плашка срочного дела в «Сводке» — своя пара цветов, заметно ярче общего
+     `--danger-soft`. Тот бледный намеренно: им залиты фоны сообщений и кнопка
+     отмены, где красный не должен кричать. Здесь наоборот — это единственная
+     строка на экране, которую нельзя пропустить. */
+  --urgent-bg: #ffdcdc;
+  --urgent-line: #ffb3b3;
+  /* Цвета графиков. Восемь оттенков, потому что в топе товаров восемь долей.
+     Первые пять — сама палитра панели от фиолетового к розовому: так круг
+     читается как одна вещь, а не как набор случайных цветов. Последние три
+     уведены в сторону намеренно — восемь оттенков одного тона рядом уже не
+     различить, а доли надо отличать друг от друга, а не любоваться ими.
+     Ссылки в разделе при этом сделаны чёрными: цветным остаётся картинка. */
+  --legend: var(--card);
+  --legend-foreground: var(--text);
+  --legend-muted: #f5f5f7;
+  --legend-muted-foreground: var(--muted);
+  --legend-track: var(--line);
+  --chart-1: #5227ff;
+  --chart-2: #7b5cf0;
+  --chart-3: #a175e6;
+  --chart-4: #b497cf;
+  --chart-5: #ff9ffc;
+  --chart-6: #f5a623;
+  --chart-7: #00a9a5;
+  --chart-8: #ff6b4a;
+  --chart-background: var(--card);
+  --chart-foreground: var(--text);
+  --chart-foreground-muted: var(--muted);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: var(--accent);
+  --chart-grid: var(--line);
+  --chart-brush-border: var(--chart-grid);
+  /* Подсказка при наведении — тёмная плашка, как в системных всплывашках. */
+  --chart-tooltip-background: rgba(29, 29, 31, 0.88);
+  --chart-tooltip-foreground: #ffffff;
+  --chart-tooltip-muted: rgba(255, 255, 255, 0.65);
+  --chart-marker-background: #f5f5f7;
+  --chart-marker-border: var(--line);
+  --chart-marker-foreground: var(--text);
+  --chart-label: var(--muted);
+  --chart-scale-01: oklch(0.98 0.003 106);
+  --chart-scale-02: oklch(0.92 0.008 106);
+  --chart-scale-03: oklch(0.82 0.015 106);
+  --chart-scale-04: oklch(0.68 0.02 106);
+  --chart-scale-05: oklch(0.55 0.025 106);
+  --chart-scale-pattern-color: oklch(0.96 0.005 106);
+}
+
+/* Те же цвета, но под именами, которые понимает Tailwind: `bg-card`,
+   `text-muted`, `rounded-card`. Значения не дублируются — токены ссылаются на
+   переменные выше, поэтому цвет панели правится ровно в одном месте. */
+@theme {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  /* Наш синий живёт под именем `primary` — см. пояснение ниже. */
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+
+  /* Имена, которыми подписаны классы в компонентах графиков (`text-foreground`,
+     `bg-foreground`, `text-muted-foreground`). Без них Tailwind просто не
+     создаёт эти классы, и, например, пилюля с процентом в воронке остаётся
+     бесцветной. Значения — наши же, поэтому вид панели от них не меняется;
+     смысл в том, что внутри тёмного блока их можно перекрыть на месте. */
+  --color-foreground: var(--text);
+  --color-background: var(--card);
+  --color-muted-foreground: var(--muted);
+
+  /* Имена, которыми размечены компоненты shadcn/ui: `bg-popover`,
+     `border-border`, `text-primary-foreground` и прочие. Заведены здесь, чтобы
+     готовый компонент из реестра приезжал уже в цветах панели и его не
+     приходилось перекрашивать руками.
+
+     Сами переменные `--card`, `--muted`, `--accent`, `--radius` при этом не
+     трогаются: у нас они значат другое (`--muted` — цвет серого текста, у
+     shadcn — светлая заливка), и подмена их значений перекрасила бы всю
+     панель. Поэтому связь сделана на уровне токенов Tailwind, а не сырых
+     переменных.
+
+     Осторожно: `accent` здесь — не наш синий, а фон под курсором, как это
+     слово понимают в shadcn. Наш синий — `primary`. */
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f0f0f4;
+  --color-secondary-foreground: var(--text);
+  --color-accent: #f0f0f4;
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-muted: #f0f0f4;
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--accent);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--text);
+  --color-card-foreground: var(--text);
+
+  --radius-card: 18px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+               Roboto, "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+        Roboto, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── Шапка ─── */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  /* Высота держится ячейкой меню в спокойном состоянии (36) плюс поля: без
+     этого шапка дёргалась бы, когда значок под курсором раздувается. */
+  min-height: 68px;
+  padding: 10px 28px;
+  background: var(--topbar-bg);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.brand:hover { text-decoration: none; opacity: 0.7; }
+
+/* ─── Меню разделов ───
+   «Плавающая» панель: значок под курсором раздувается, соседние — слабее.
+   Движение считает components/ui/floating-dock.tsx, здесь только вид.
+
+   Меню стоит по центру шапки независимо от длины названия магазина, поэтому
+   оно вынуто из потока: при обычном выравнивании длинное название сдвигало бы
+   его вбок, и на разных страницах центр оказывался бы в разных местах. */
+.dock {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--dock-bg);
+}
+
+.dock-item { display: block; line-height: 0; }
+.dock-item:hover { text-decoration: none; }
+
+.dock-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: var(--dock-cell-bg);
+  color: var(--muted);
+  box-shadow: var(--shadow-soft);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.dock-item:hover .dock-cell { color: var(--text); }
+
+/* Текущий раздел — цветом панели. По меню понимают, где находятся, и метка
+   должна читаться, даже когда курсора на экране нет вовсе. */
+.dock-cell[data-active="true"] {
+  background: var(--accent-gradient-solid);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(82, 39, 255, 0.35);
+}
+.dock-item:hover .dock-cell[data-active="true"] { color: #fff; }
+
+/* Значок тянется за ячейкой: motion задаёт размер рамке, а картинка внутри
+   занимает её целиком. */
+.dock-glyph { display: block; }
+.dock-glyph svg { width: 100%; height: 100%; stroke-width: 1.75; }
+
+/* Подпись — под значком: меню стоит сверху, и над ним места нет. */
+.dock-tip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  padding: 3px 9px;
+  border-radius: 8px;
+  /* Не `--text` с белой надписью: в тёмной теме цвет текста сам светлый, и
+     подсказка превращалась в белый прямоугольник с белыми же буквами. Пара
+     `--solid` / `--on-solid` переворачивается вместе с темой — светлая плашка
+     с тёмной надписью в темноте, тёмная со светлой днём. */
+  background: var(--solid);
+  color: var(--on-solid);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ─── Меню на узком экране ─── */
+
+/* Переключатель темы. `margin-left: auto` съедает всё свободное место слева,
+   поэтому кнопка стоит у правого края независимо от длины названия магазина, а
+   меню разделов остаётся ровно по центру — оно вынуто из потока. */
+.theme-switch { margin-left: auto; flex: none; }
+
+.dock-menu { display: none; position: relative; }
+
+.dock-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--text);
+  cursor: pointer;
+}
+.dock-toggle svg { width: 20px; height: 20px; }
+
+.dock-drop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-drop);
+}
+.dock-drop .dock-item { line-height: normal; }
+.dock-drop .dock-cell {
+  justify-content: flex-start;
+  gap: 10px;
+  aspect-ratio: auto;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-size: 15px;
+}
+.dock-drop .dock-cell[data-active="true"] { background: var(--accent-soft); color: var(--accent); }
+.dock-drop .dock-glyph { width: 18px; height: 18px; flex: 0 0 18px; }
+
+/* Ниже этой ширины раздутый значок и четыре подписи рядом уже не помещаются
+   вместе с названием магазина — меню сворачивается в кнопку. */
+@media (max-width: 720px) {
+  .dock { display: none; }
+  .dock-menu { display: block; }
+}
+
+/* ─── Страница ─── */
+
+.page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 36px 28px 72px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin: 0 0 18px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.lead { margin: 6px 0 0; color: var(--muted); }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.strong { font-weight: 600; color: var(--text); }
+.strike { text-decoration: line-through; }
+.danger { color: var(--danger); font-weight: 600; }
+.back { margin: 0 0 18px; font-size: 14px; }
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.head-actions { display: flex; gap: 10px; }
+
+/* Переключатель вида внутри раздела: список товаров или остатки по размерам.
+   Не навигация по разделам — поэтому не в шапке, а над фильтрами. */
+.tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: -6px 0 18px;
+  border-radius: 980px;
+  background: var(--fill-strong);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tabs a {
+  padding: 7px 16px;
+  border-radius: 980px;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tabs a:hover { color: var(--text); text-decoration: none; }
+
+.tabs a.on {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* ─── Карточки ─── */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 24px 26px;
+  margin-bottom: 22px;
+}
+
+.card p { margin: 0; }
+.card .links { line-height: 2; }
+
+.empty-state p + p { margin-top: 8px; }
+
+.problems {
+  background: var(--flash-err-bg);
+  color: var(--danger);
+}
+/* list-style задан явно: базовый слой Tailwind снимает маркеры у всех списков,
+   а здесь перечислены причины отказа — без маркеров они сливаются в абзац. */
+.problems ul { margin: 8px 0 0; padding-left: 20px; list-style: disc; }
+
+/* Сообщение о результате действия */
+.flash {
+  margin: 0 0 20px;
+  padding: 13px 18px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+.flash.ok { background: var(--accent-soft); color: var(--accent-deep); }
+.flash.warn { background: var(--flash-warn-bg); color: var(--flash-warn-fg); }
+.flash.err { background: var(--flash-err-bg); color: var(--danger); }
+
+/* ─── Сводка ─── */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+/* Карточка приподнимается под курсором: она ссылка, а не просто цифра, и это
+   единственный способ показать разницу — подчёркивать заголовок внутри плашки
+   такого размера некрасиво. Кривая с «выбегом» (0.2, 0.8) не линейная нарочно:
+   так движение похоже на предмет, а не на переключение состояния. */
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 22px 24px;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  /* В покое плашка выглядит обычной карточкой: единственный признак того, что
+     она открывается, — уголок в заголовке. Рамка и подъём приходят под
+     курсором. */
+  border: 1px solid transparent;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.22s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+.metric:hover {
+  text-decoration: none;
+  background: var(--row-hover);
+  border-color: var(--accent-line);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-drop);
+}
+/* Нажатие возвращает плашку на место — короткая «отдача» вместо мгновенного
+   перехода на новый экран. */
+.metric:active { transform: translateY(-1px); transition-duration: 0.08s; }
+
+.metric-title { font-size: 13px; color: var(--muted); }
+.metric-value {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease;
+}
+.metric:hover .metric-value { color: var(--accent); }
+.metric-sub { font-size: 14px; }
+.metric-hint { font-size: 12px; color: var(--muted); }
+
+/* ─── Признак «сюда можно нажать» ───
+   Уголок в строке заголовка, приглушённый и видимый всегда: подъём под
+   курсором сообщает о переходе только тому, кто уже навёл мышь, а знать это
+   надо заранее — иначе цифры на экране выглядят просто цифрами. Стоит в углу
+   плашки, у правого края, и одинаково в «Сводке» и «Статистике». */
+.metric-title,
+a.stat .stat-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.metric-title::after,
+a.stat .stat-title::after {
+  content: "›";
+  flex: none;
+  font-size: 17px;
+  line-height: 1;
+  /* В покое уголок уже акцентного цвета, просто приглушённый: серый читался
+     как часть подписи, а не как признак того, что плашка живая. */
+  color: var(--accent);
+  opacity: 0.55;
+  transition: transform 0.2s ease, opacity 0.2s ease, color 0.2s ease;
+}
+.metric:hover .metric-title::after,
+a.stat:hover .stat-title::after {
+  opacity: 1;
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+/* Список дел. Цифра слева крупная и сама по себе ссылка: по ней и попадают в
+   отфильтрованный список, не целясь в подпись.
+
+   Пункты — плашки, а не строки, разделённые чертой. Каждая строка здесь
+   отдельное дело, и плашка это показывает честнее линейки: у списка из двух
+   пунктов не остаётся висящих разделителей, а срочное можно выделить фоном,
+   не подкрашивая одну цифру. */
+.attention { list-style: none; margin: 0; padding: 0;
+             display: flex; flex-direction: column; gap: 10px; }
+
+.attention li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.attention li:hover {
+  background: var(--card);
+  border-color: var(--line);
+  transform: translateX(3px);
+}
+
+/* Цифра в жетоне: в ряду из трёх пунктов числа выстраиваются в столбик
+   одинаковой ширины, и «сколько всего ждёт» читается сверху вниз одним
+   взглядом. */
+.attention-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.attention-count:hover { text-decoration: none; transform: scale(1.06); }
+
+/* Срочное — та же плашка в красноватом тоне. Цвет тут значащий: «клиент ждёт
+   ответа про деньги» отличается от «надо собрать посылку». */
+.attention li.urgent { background: var(--urgent-bg); border-color: var(--urgent-line); }
+.attention li.urgent:hover { background: var(--urgent-bg); border-color: var(--danger); }
+.attention li.urgent .attention-count {
+  background: var(--card);
+  border-color: transparent;
+  color: var(--danger);
+}
+
+.attention-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.attention-title {
+  font-size: 15px;
+  font-weight: 590;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.attention-title:hover { text-decoration: none; color: var(--accent); }
+.attention-hint { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+
+/* Уголок справа: намёк, что плашка ведёт в список. Не иконка и не кнопка —
+   просто движение навстречу курсору. */
+.attention li::after {
+  content: "›";
+  flex: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.5;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.attention li:hover::after { opacity: 1; transform: translateX(3px); }
+
+/* ─── Сводка: две колонки ───
+   Слева заказы, ждущие человека, справа — склад. Колонки выровнены по верху
+   (`start`), а не растянуты: списки в них разной длины, и тянуть короткий до
+   высоты длинного значит рисовать пустую карточку в пол-экрана. */
+.summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.summary-grid > .card { margin-bottom: 0; }
+
+@media (max-width: 900px) {
+  .summary-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Счётчик у заголовка: сколько всего размеров кончилось. Стоит здесь, а не в
+   строке под ним, потому что это первое, на что смотрят, — «много ли». */
+.stock-feed h2 { display: flex; align-items: center; gap: 10px; }
+.stock-feed .badge {
+  padding: 1px 9px;
+  border-radius: 980px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Лента складских сообщений: каждая строка — одно «кончился такой-то размер».
+   Размер вынесен вправо на отдельную плашку: пополняют именно его, и в списке
+   из восьми строк глаз должен находить его сразу, не вычитывая название. */
+.alerts { list-style: none; margin: 0 0 16px; padding: 0;
+          display: flex; flex-direction: column; gap: 8px; }
+.alerts li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.alert-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.alert-main .strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alert-size {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 980px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.zero-stock { list-style: none; margin: 14px 0 18px; padding: 0; }
+
+.zero-stock li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.zero-stock li:last-child { border-bottom: none; }
+
+/* ─── Кнопки ─── */
+
+.btn {
+  display: inline-block;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 980px;           /* пилюля */
+  background: var(--fill-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.btn:hover { background: var(--fill-strong-hover); text-decoration: none; }
+
+.btn.primary { background: var(--accent-gradient-solid); color: #fff; }
+/* Наведение не подменяет цвет, а высветляет плашку целиком: подобрать вторую
+   пару концов градиента так, чтобы переход остался ровным, труднее, чем поднять
+   яркость. */
+.btn.primary:hover { background: var(--accent-gradient-solid); filter: brightness(1.12); }
+
+.btn.ghost { background: transparent; color: var(--accent); padding: 7px 12px; }
+.btn.ghost:hover { background: var(--accent-soft); }
+
+.btn.danger-btn { background: transparent; color: var(--danger); }
+.btn.danger-btn:hover { background: var(--danger-soft); }
+
+.btn.small { font-size: 13px; padding: 5px 11px; }
+
+/* Цвет круга, разбегающегося при нажатии (см. components/ripple.tsx). Светлый
+   сиреневый идёт всем, кроме двух случаев: на фиолетовой кнопке он пропал бы в
+   фоне и взят ещё светлее, а на кнопке удаления сиреневая вспышка спорила бы с
+   красной надписью. */
+.btn { --ripple: #d9ccff; }
+.btn.primary { --ripple: #e6dcff; }
+.btn.danger-btn { --ripple: #ffcdc9; }
+
+/* Кнопка, пока запрос в пути. Раньше повторную отправку ловил app.js: страница
+   перезагружалась целиком, и живая кнопка успевала принять второй тап. Теперь
+   её гасит сам React по состоянию запроса, но вид «занята» нужен прежний. */
+.btn:disabled { opacity: 0.55; cursor: default; }
+.btn:disabled:hover { background: var(--fill-strong); }
+.btn.primary:disabled:hover { background: var(--accent-gradient-solid); filter: none; }
+
+/* ─── Формы ─── */
+
+.form { display: flex; flex-direction: column; gap: 18px; }
+
+/* Подсказка над блоком полей («без вариантов товар не купить») иначе прилипает
+   к первой строке формы: у абзацев внутри карточки отступов нет. */
+.card > p + .form { margin-top: 14px; }
+
+.form label { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.form label > span { font-size: 13px; color: var(--muted); }
+
+.form .row { display: flex; gap: 16px; flex-wrap: wrap; }
+.form .row label { min-width: 180px; }
+.form label.narrow { flex: 0 0 110px; min-width: 110px; }
+
+input[type="text"],
+input[type="search"],
+input[type="date"],
+input[type="file"],
+textarea,
+select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+textarea { resize: vertical; }
+
+/* ─── Выпадающие списки ─── */
+
+/* Системную стрелку убираем и рисуем свою: у Windows она прямоугольная,
+   серая и рядом с круглыми полями панели смотрится чужой. */
+select {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%2386868b' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.75 6 6.5 11 1.75'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+}
+select:hover { border-color: var(--line-hover); }
+
+/* Сам список — в стиле панели: белая карточка со скруглением и тенью, как
+   остальные карточки, выбранный пункт подсвечен и помечен галочкой.
+
+   ДВА ПРАВИЛА, КОТОРЫЕ ЗДЕСЬ НЕЛЬЗЯ НАРУШАТЬ — на них уже наступили раз, и
+   списки перестали открываться по всей панели:
+
+   1. Ничего, что управляет видимостью списка: ни opacity, ни visibility, ни
+      display, ни transform, ни transition/@starting-style. Показывает и
+      скрывает список браузер. В прошлый раз здесь стояло opacity: 0 в базовом
+      состоянии и opacity: 1 на ::picker(select):open — как только браузер
+      включил у себя поддержку, список стал открываться прозрачным, то есть
+      «кнопка ничего не делает».
+   2. Пункты — только через «select option». Голый «option» задевает и
+      подсказки в полях с datalist (категория товара), а их устройство совсем
+      другое — они от таких правил ломаются.
+
+   Всё, что ниже, — только цвета, отступы и скругления. Если браузер чего-то
+   из этого не поймёт, список останется системным, но откроется. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+
+  select {
+    /* Стрелку теперь рисует ::picker-icon — фоновая картинка дала бы вторую. */
+    background-image: none;
+    padding-right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  select::picker-icon {
+    color: var(--muted);
+    /* Поворот стрелки — оформление самой кнопки, а не списка: даже если
+       переход не сработает, на открытие списка это не влияет. */
+    transition: transform 0.16s ease;
+  }
+  select:open::picker-icon { transform: rotate(180deg); }
+  select:open { border-color: var(--accent); }
+
+  ::picker(select) {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: var(--shadow-drop);
+    padding: 6px;
+    margin-top: 6px;
+    /* Категорий может быть много — длинный список листается внутри себя. */
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  select option {
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 15px;
+    /* Галочка выбранного пункта стоит в отдельной колонке, поэтому подписи
+       выравниваются по левому краю независимо от неё. */
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+  select option:hover, select option:focus {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  select option:checked { font-weight: 500; }
+  select option::checkmark { color: var(--accent); }
+}
+
+/* ─── Выбор файлов ─── */
+
+/* Стандартное поле — серая системная кнопка и подпись «Файл не выбран».
+   Кнопку приводим к виду остальных, поле — к виду остальных полей. */
+input[type="file"] {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 980px;
+  background: var(--fill-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+input[type="file"]:hover::file-selector-button { background: var(--fill-strong-hover); }
+input[type="file"]:hover { border-color: var(--line-hover); }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Кнопка сохранения склада всегда под рукой: список длинный, и промотать его
+   до конца ради одной кнопки — лишняя работа. */
+.actions.sticky {
+  position: sticky;
+  bottom: 0;
+  padding: 16px 0;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+
+.new-variant { align-items: flex-end; }
+
+/* Ряд кнопок «подержать». Сами кнопки приехали из реестра со своим видом
+   (скругление 6, своя высота) — его не трогаем, владелец прислал их именно
+   такими. Здесь только воздух вокруг: пояснения к действиям владелец просил
+   убрать — кнопка называет себя сама, а что она делает, видно по надписи. */
+.hold-actions { gap: 12px; }
+
+/* ─── Фильтры ─── */
+
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 18px 20px;
+}
+.filters input[type="search"] { flex: 2 1 240px; width: auto; }
+.filters select { flex: 1 1 150px; width: auto; }
+
+/* Списки отбора — компонент Select из реестра shadcn/ui. Он приезжает со
+   своими размерами (кнопка в 32 пикселя высотой, скругление 8), и рядом с
+   полем поиска это выглядело бы как чужая деталь. Ниже — приведение к виду
+   остальных полей панели: те же отступы, скругление, рамка и подсветка. */
+.filters [data-slot="select"] { flex: 1 1 150px; width: auto; }
+
+.filters [data-slot="select-trigger"] {
+  height: auto;
+  padding: 10px 12px 10px 14px;
+  border-radius: 12px;
+  border-color: var(--line);
+  background: var(--input-bg);
+  font-size: 15px;
+  cursor: pointer;
+}
+.filters [data-slot="select-trigger"]:hover { border-color: var(--line-hover); }
+.filters [data-slot="select-trigger"][data-focus-visible],
+.filters [data-slot="select-trigger"][data-pressed] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Сам список висит в конце страницы, а не внутри формы, — отбирать его по
+   .filters нельзя. Другого Select в панели нет, поэтому берём по слоту. */
+[data-slot="select-content"] {
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow:
+    0 1px 2px rgba(20, 26, 60, 0.06),
+    0 12px 32px rgba(20, 26, 60, 0.14);
+}
+
+[data-slot="select-item"] {
+  padding: 8px 30px 8px 12px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+[data-slot="select-item"][data-focused],
+[data-slot="select-item"][data-hovered] {
+  background: var(--surface);
+  color: var(--text);
+}
+[data-slot="select-item"][data-selected] { font-weight: 500; }
+[data-slot="select-item"][data-selected] svg { color: var(--accent); }
+
+/* ─── Таблицы ─── */
+
+/* Не `.grid`: у Tailwind так называется утилита `display: grid`, и таблица
+   переставала быть таблицей — колонки сбивались в левый угол, а подписи
+   оказывались не над своими числами. Наши правила перебивали ширину и шрифт,
+   но `display` объявлял только Tailwind, перебивать было нечего. */
+.table-wrap { overflow-x: auto; padding: 8px 10px; }
+
+.data-grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+
+.data-grid th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.data-grid td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.data-grid tbody tr:last-child td { border-bottom: none; }
+.data-grid tbody tr:hover { background: var(--row-hover); }
+
+/* Строка, открывающаяся вся целиком (см. components/ui.tsx::useRowLink).
+   Курсор-палец — единственный признак, по которому это видно заранее: подсветка
+   при наведении есть и у обычных строк. */
+.data-grid tbody tr.row-link { cursor: pointer; }
+
+.data-grid .num { text-align: right; white-space: nowrap; }
+/* Явно и для шапки: без этого «ШТУК» и «ВЫРУЧКА» прижимаются к левому краю
+   своей колонки, а числа под ними стоят у правого — подпись оказывается не над
+   данными, а где-то сбоку. */
+.data-grid th.num { text-align: right; }
+.data-grid td .small { display: block; }
+
+.thumb-col { width: 60px; }
+.thumb {
+  display: block;
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.thumb.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dot);
+}
+
+input.stock { width: 84px; text-align: right; padding: 7px 10px; }
+input.stock.zero { color: var(--danger); }
+
+/* ─── Метки статуса ─── */
+
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 980px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tag.on { background: var(--tag-ok-bg); color: var(--ok); }
+.tag.off { background: var(--fill); color: var(--muted); }
+
+/* Статусы заказа. Цвет здесь — не украшение: по списку менеджер ищет глазами
+   то, что горит (клиент говорит, что оплатил), и то, что уже уехало. */
+.tag.st-new,
+.tag.st-awaiting_payment { background: var(--tag-warn-bg); color: var(--tag-warn-fg); }
+.tag.st-paid_claimed     { background: var(--tag-hot-bg); color: var(--tag-hot-fg); }
+.tag.st-confirmed        { background: var(--accent-soft); color: var(--accent-deep); }
+.tag.st-shipped          { background: var(--tag-ship-bg); color: var(--tag-ship-fg); }
+.tag.st-done             { background: var(--tag-ok-bg); color: var(--ok); }
+.tag.st-cancelled        { background: var(--fill); color: var(--muted); }
+
+h1 .tag { vertical-align: 6px; margin-left: 8px; font-size: 13px; }
+
+/* ─── Вкладки ─── */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 15px;
+  border-radius: 980px;
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: 14px;
+}
+.tab:hover { background: var(--fill-hover); text-decoration: none; }
+.tab.active { background: var(--solid); color: var(--on-solid); }
+
+/* Выбранная вкладка под курсором. Строка не лишняя: цвет подписи иначе задаёт
+   общее правило `.tabs a:hover` — оно специфичнее, красит текст в чёрный, и на
+   почти чёрной пилюле надпись пропадала целиком. Фон при этом чуть светлеет,
+   чтобы наведение всё-таки отзывалось. */
+.tab.active:hover { background: var(--solid-hover); color: var(--on-solid); }
+
+.tab .count { color: var(--muted); font-size: 12px; }
+.tab.active .count { color: color-mix(in srgb, var(--on-solid) 70%, transparent); }
+
+/* Вкладки — те же кнопки, только фильтруют список. Отзываются так же. */
+.tab, .tabs a { --ripple: #d9ccff; }
+
+/* ─── Карточка заказа ─── */
+
+.order-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.items { list-style: none; margin: 0 0 18px; padding: 0; }
+
+.items li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.items li:last-child { border-bottom: none; }
+
+.item-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.item-sum { display: flex; flex-direction: column; gap: 2px; text-align: right; white-space: nowrap; }
+
+.total { font-size: 17px; }
+.card .total { margin: 0 0 6px; }
+
+.take { display: flex; gap: 8px; align-items: center; }
+.take input { width: 150px; }
+
+.form.ttn, .form.cancel { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+
+.filters label.inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.filters label.inline > span { font-size: 13px; color: var(--muted); }
+.filters input[type="date"] { width: auto; }
+
+.pairs { line-height: 2; }
+.pairs .small { display: inline-block; min-width: 130px; }
+
+/* Путь заказа: пройденные шаги отмечены точкой-акцентом, будущие — бледной. */
+.timeline { list-style: none; margin: 0; padding: 0; }
+
+.timeline li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0 9px 20px;
+  position: relative;
+  color: var(--muted);
+}
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 15px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--fill-strong-hover);
+}
+.timeline li.done { color: var(--text); }
+.timeline li.done::before { background: var(--accent); }
+
+/* ─── Память бота о клиенте ─── */
+
+.notes { list-style: none; margin: 0 0 12px; padding: 0; display: flex;
+         flex-direction: column; gap: 8px; }
+
+.notes li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--fill);
+}
+/* Текст забирает всю свободную ширину, дата и кнопка прижаты вправо. */
+.notes .text { flex: 1; }
+.notes form { margin: 0; }
+
+/* ─── Переписка клиента с ботом ─── */
+
+.chat { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.chat li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 75%;
+  padding: 11px 15px;
+  border-radius: 16px;
+  background: var(--fill);
+}
+.chat li.from-bot { align-self: flex-end; background: var(--accent-soft); }
+
+.chat .who { font-size: 12px; color: var(--muted); }
+.chat .text { white-space: pre-wrap; }
+
+/* ─── Фото ─── */
+
+.photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.photo { margin: 0; }
+.photo img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 14px;
+  background: var(--fill);
+}
+.photo.main img { box-shadow: 0 0 0 2px var(--accent); }
+
+.photo figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+/* Выбор фото: плитки с превью. Повторный выбор в диалоге добавляет снимки, а
+   не заменяет набор — продавец снимает товар в несколько заходов. Раньше это
+   чинил app.js через DataTransfer, теперь набор живёт в состоянии React. */
+.photo-picker { margin-top: 12px; }
+.photo-picker > p { margin: 8px 0 0; }
+
+/* Пунктирная плитка «Добавить» — она же место, куда бросают файлы. */
+.photo-picker.over .photo-add {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Плитка выбора нажимается целиком, поэтому под курсором должна отзываться.
+   Фон при наведении задаёт сам компонент — здесь только рамка, иначе два
+   правила спорили бы за одно и то же. */
+.photo-add { cursor: pointer; }
+.photo-add:hover { border-color: var(--line-hover); }
+
+/* Крестик «убрать снимок» — белый кружок поверх фото. Своим цветом он тонул:
+   значок наследует цвет текста, а фотографии тёмные, и на чёрной куртке его
+   было не видно вовсе. Кружок читается на любом снимке, поэтому кнопка
+   осталась на месте — прятать её за пределы плитки не пришлось. */
+.photo-picker [data-slot="attachment-actions"] {
+  top: 7px;
+  right: 7px;
+}
+.photo-picker [data-slot="attachment-action"] {
+  width: 24px;
+  height: 24px;
+  border-radius: 980px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--plate);
+  color: var(--text);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(6px);
+}
+.photo-picker [data-slot="attachment-action"]:hover {
+  background: var(--card);
+  color: var(--danger);
+}
+
+/* Полоса прокрутки у ряда плиток: компонент ждёт эту утилиту от своей темы.
+   Растворения краёв (`scroll-fade-x`) здесь намеренно нет — оно съедало
+   рамку крайних плиток, а ряд у нас короткий и в прокрутке не нуждается. */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ─── Действия над товаром целиком ─── */
+
+/* Стоят внизу карточки, отдельным блоком: рядом с полями их легко нажать
+   вместо «Сохранить всё». */
+.card-actions .row { display: flex; gap: 12px; flex-wrap: wrap; }
+.card-actions p { margin-top: 12px; }
+
+/* ─── Пагинация ─── */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+/* ─── Статистика ─── */
+
+/* Раздел оформлен по макету владельца и отличается от остальной панели: белые
+   карточки лежат не на ровном сером поле, а на светлом фоне с подсветкой из
+   правого верхнего угла, и потому им нужна тень — без неё они растворяются.
+   Всё это заперто внутри `.stats`: «Заказы» и «Товары» остаются как были. */
+.stats {
+  position: relative;
+}
+
+/* Колонка раздела шире остальной панели. На макете карточки идут почти во всю
+   ширину экрана, и это не прихоть: в мозаике шесть блоков, и в обычные 1040
+   пикселей график с таблицей ужимаются до нечитаемого.
+   Через `:has`, чтобы не трогать «Заказы» и «Товары» — там строки длинные, и
+   широкая колонка им только вредит. */
+.page:has(.stats) { max-width: 1280px; }
+
+.stats .card {
+  border-radius: 20px;
+  box-shadow: var(--stats-shadow);
+}
+
+/* Строка периода — не карточка, а несколько отдельных белых плашек с зазорами:
+   переключатель, два поля с датами и кнопка. Так на макете, и так честнее —
+   это разные органы управления, а не один блок. */
+.stats .filters {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  gap: 10px;
+}
+
+.stats .filters input[type="date"] {
+  border-color: transparent;
+  box-shadow: var(--stats-shadow);
+}
+
+.stats .filters .btn[type="submit"] {
+  background: var(--card);
+  box-shadow: var(--stats-shadow);
+}
+.stats .filters .btn[type="submit"]:hover { background: var(--stat-hover-bg); }
+
+/* Выбор периода стоит перед цифрами, потому что от него зависят все они.
+   Три отрезка живут в одной белой пилюле, нажатый помечен чёрным — так же,
+   как активная вкладка товаров. */
+/* `nowrap` — чтобы на телефоне «30 дней» не ломалось на две строки: пилюли
+   тогда становятся разной высоты, и ряд выглядит перекошенным. */
+.period-presets { display: flex; gap: 4px; }
+.period-presets .btn { white-space: nowrap; }
+.stats .period-presets {
+  padding: 5px;
+  border-radius: 980px;
+  background: var(--card);
+  box-shadow: var(--stats-shadow);
+}
+.stats .period-presets .btn { background: transparent; }
+.stats .period-presets .btn:hover { background: var(--surface); }
+.period-presets .btn.on {
+  background: var(--solid);
+  color: var(--on-solid);
+}
+.period-presets .btn.on:hover { background: var(--solid-hover); }
+
+/* Раскладка раздела: карточки разной ширины в общей сетке, а не колонкой во всю
+   страницу. Причина простая — на «Статистике» девять смысловых кусков, и если
+   каждый занимает всю ширину, до товаров приходится крутить три экрана. Здесь
+   же соседние вещи видно рядом: продажи и клиенты, воронка и отмены.
+
+   Двенадцать колонок, ширина блока задаётся классом. Порядок при этом обычный
+   (без grid-auto-flow: dense) — числа должны идти так, как их читают, а не так,
+   как удобнее упаковать. */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  /* Карточки в ряду одной высоты (`stretch` по умолчанию, а не `start`):
+     иначе соседние блоки заканчиваются на разной высоте, и ряд выглядит
+     оборванным — особенно когда слева таблица, а справа короткий список. */
+}
+
+/* Весь раздел монохромный. Синий в панели значит «сюда можно нажать», и на
+   странице, где половина текста — ссылки на заказы и товары, он рябит и
+   спорит с графитовыми графиками. Здесь ссылку показывает подчёркивание при
+   наведении, а не цвет. */
+.stats a:not(.btn) { color: var(--text); }
+.stats a:not(.btn):not(.stat):hover { text-decoration: underline; }
+
+/* Плашка с числом — не текст, а карточка: подчёркивать в ней нечего, иначе
+   при наведении «Оформлено», сумма и подпись разом обзаводятся линиями и
+   плашка выглядит поломанной. Отклик даёт фон, он же показывает, что по ней
+   можно перейти в список. */
+.stats a.stat,
+.stats a.stat:hover { text-decoration: none; }
+.stats .btn.ghost { color: var(--text); }
+.stats .btn.ghost:hover { background: var(--surface-hover); }
+
+/* Внутри сетки карточка компактнее обычной: воздуха между блоками теперь
+   добавляет сам зазор сетки, а вертикальный отступ здесь только мешал бы. */
+.stats-grid .card {
+  margin-bottom: 0;
+  padding: 20px 22px;
+  height: 100%;
+}
+/* Значок у заголовка — только чтобы блок находился глазами, поэтому он мелкий
+   и не спорит с текстом. По одному на карточку и больше нигде. */
+.stats-grid .card h2 {
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+/* Значок сидит в светло-голубой плитке — так на макете. Плитка заодно держит
+   строку заголовка ровной: у значков разная плотность, и без общей подложки
+   один блок казался бы сдвинутым относительно другого. */
+.sec-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--icon-tile);
+}
+
+.span-4 { grid-column: span 4; }
+.span-5 { grid-column: span 5; }
+.span-7 { grid-column: span 7; }
+.span-8 { grid-column: span 8; }
+.span-12 { grid-column: span 12; }
+
+/* Числа блока: те же карточки-метрики, что на «Сводке», но помельче — здесь их
+   на экране втрое больше. Ссылка и не-ссылка выглядят одинаково: разница лишь
+   в том, что по одним можно перейти в список. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+.stat-row.tight { margin-bottom: 4px; }
+
+/* В узкой карточке плашки идут одна под другой. Втиснутые в два столбца по
+   130 пикселей, они режут подписи вроде «Разговор → заказ» пополам. */
+.stats-grid .span-4 .stat-row { grid-template-columns: minmax(0, 1fr); }
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+/* Кликабельные плашки живут тем же движением, что и метрики «Сводки»: подъём
+   под курсором. Плашки-не-ссылки («Средний чек», «Собираем в среднем») стоят
+   неподвижно — по ним никуда не перейти, и обещать переход нечестно. */
+a.stat {
+  border: 1px solid transparent;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.22s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+a.stat:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent-line);
+  text-decoration: none;
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-drop);
+}
+a.stat:active { transform: translateY(-1px); transition-duration: 0.08s; }
+
+/* В «Статистике» плашки белые с тонкой рамкой: карточка под ними тоже белая,
+   и серая заливка на светлом фоне раздела выглядела бы грязным пятном. */
+.stats .stat {
+  background: var(--card);
+  border: 1px solid var(--stat-border);
+  border-radius: 14px;
+}
+/* Правило идёт после общего `.stats .stat`, иначе серая рамка перекрыла бы
+   сиреневую по специфичности. */
+.stats a.stat:hover { background: var(--stat-hover-bg); border-color: var(--accent-line); }
+
+.stat-title { font-size: 12px; color: var(--muted); }
+.stat-value {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  transition: color 0.2s ease;
+}
+a.stat:hover .stat-value { color: var(--accent); }
+.stat-sub { font-size: 12px; color: var(--muted); }
+
+/* ─── График выручки ─── */
+
+/* Карточка графика — как в демо «Bar Chart · Interactive» реестра: шапка с
+   названием слева и переключателями справа, под ней столбики. Тёмный фон из
+   их примера не берём, панель светлая ([[light-theme-only]]); всё остальное —
+   раскладка, границы, крупные числа — оттуда. */
+.chart-card {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.chart-head {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+}
+
+.chart-head-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px 20px;
+}
+.chart-head-name { font-weight: 600; font-size: 15px; }
+.chart-head-note { font-size: 13px; color: var(--muted); }
+
+.chart-tabs { display: flex; }
+
+/* Кнопка-переключатель: подпись мелким и число крупным, как у них. Своей
+   рамки нет — её роль играют линии между ячейками шапки. */
+.chart-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 20px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.chart-tab + .chart-tab { border-left: 1px solid var(--line); }
+.chart-tab:hover { background: var(--row-hover); }
+.chart-tab[data-active="true"] { background: var(--surface); }
+.chart-tab-title { font-size: 12px; color: var(--muted); }
+.chart-tab-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* На широком экране переключатели встают справа от названия, а разделяет их
+   вертикальная линия — на узком они уезжают под название, и линия становится
+   горизонтальной. Это поведение их демо. */
+@media (min-width: 640px) {
+  .chart-head { flex-direction: row; }
+  .chart-tab {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    padding: 14px 26px;
+  }
+}
+
+/* Размер поля графика задаёт сама обвязка Chart — как в демо. Здесь только
+   воздух: вплотную к рамке карточки столбики выглядят зажатыми. */
+.chart-area { padding: 14px 8px 6px; }
+
+/* Воронку рисует компонент из реестра @bklit — вид и движение целиком его,
+   как в их примере. Здесь только воздух вокруг: сверху она стоит под
+   пояснением, снизу под ней идут цифры доставки. */
+.funnel { width: 100%; margin: 6px 0 4px; }
+
+/* Подписи ступеней лежат прямо на заливке, а заливка идёт от тёмно-фиолетового
+   к светло-розовому — один цвет текста читался бы в лучшем случае на половине
+   воронки. Поэтому число и название получают белую плашку: тёмная надпись на
+   белом видна одинаково на всех пяти ступенях. Процент оригинал уже кладёт на
+   тёмную плашку, его не трогаем. */
+.funnel [data-slot="funnel-value"],
+.funnel [data-slot="funnel-label"] {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--plate);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(23, 22, 28, 0.12);
+}
+
+/* Название — помельче и потише числа: это подпись, а не сама величина. */
+.funnel [data-slot="funnel-label"] {
+  color: var(--plate-text);
+  font-size: 11.5px;
+}
+
+/* Круг и легенда рядом, пока хватает ширины. */
+.pie-row {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin: 8px 0 16px;
+}
+.pie-legend { min-width: 190px; flex: 1; }
+
+/* Отмены лентой: тонкая линия с отметками слева, каждое событие — плашка.
+   Так видно, что отмены случались одна за другой, а не просто перечислены. */
+.events {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0 0 0 20px;
+  position: relative;
+}
+.events::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: var(--line);
+}
+.events li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.events li:last-child { margin-bottom: 0; }
+/* Отметка на линии. Обводка цветом карточки прячет линию под кружком. */
+.events li::before {
+  content: "";
+  position: absolute;
+  left: -21px;
+  top: 16px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 0 3px var(--card);
+}
+.events .text { line-height: 1.45; }
+
+/* Залежавшиеся товары — со снимком: длинное название читается медленно,
+   картинка узнаётся сразу. */
+.idle-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.idle-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Поля по бокам съедены отрицательным отступом: подсветка при наведении
+     заходит за края списка, а сам список стоит там же, где стоял. */
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.idle-list li:last-child { border-bottom: none; }
+/* Пункт открывается нажатием целиком (components/ui.tsx::useRowLink). */
+.idle-list li.row-link { cursor: pointer; transition: background 0.18s ease; }
+.idle-list li.row-link:hover { background: var(--row-hover); }
+.idle-list .idle-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.idle-list .thumb { flex: none; }
+
+/* Счётчик обслуженных: единственное место в панели с крупной цифрой ради самой
+   цифры. Она накопительная и меняется редко — потому и заметная. */
+.served {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 0 2px;
+}
+.served-value {
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+.served-label { font-size: 13px; color: var(--muted); }
+
+/* ─── Уведомления о новых заказах ─── */
+
+/* Единственное, чего в старой панели не было. Держим тот же язык, что и
+   карточки разделов: белый фон, крупный радиус, мягкая тень — только тень
+   заметнее, потому что карточка лежит поверх страницы. */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 40px));
+  pointer-events: none;
+}
+
+/* Кликается сама карточка, а не колонка: сквозь пустое место под стопкой
+   страница должна оставаться доступной. */
+.toasts > * { pointer-events: auto; }
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-toast);
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+.toast:hover { box-shadow: var(--shadow-toast-hover); }
+
+.toast-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+}
+
+.toast-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.toast-title { font-weight: 600; font-size: 14px; }
+.toast-text { font-size: 14px; }
+.toast-sub { font-size: 13px; color: var(--muted); }
+.toast-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.toast-close {
+  flex: none;
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.toast-close:hover { color: var(--text); }
+
+/* ─── Круг под нажатием ─── */
+
+/* Круги рисуются поверх страницы отдельным слоем, а не внутри кнопок: см.
+   components/ripple.tsx. Слой ничего не ловит и лежит выше окна «Точно
+   удалить?» (z-50), иначе кнопки в нём отзывались бы молча. */
+.ripple-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* Рамка по размеру кнопки: круг не должен вылезать за её скругления. */
+.ripple-clip {
+  position: absolute;
+  overflow: hidden;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  animation: ripple-out 600ms ease-out;
+}
+
+/* Оригинал начинает с непрозрачного круга — но там он лежит под надписью. Наш
+   идёт поверх, поэтому начинает вполсилы: так надпись читается всё время. */
+@keyframes ripple-out {
+  from { transform: scale(0); opacity: 0.45; }
+  to   { transform: scale(2); opacity: 0; }
+}
+
+/* ─── Устройства ───
+
+   Три размера: компьютер (как было), планшет и телефон. Правило, по которому
+   всё это построено: НИЧЕГО НЕ СЖИМАТЬ ДО НЕЧИТАЕМОГО. Таблица заказов на
+   телефоне не ужимается в пять узких колонок, а прокручивается вбок; график
+   не давит тридцать дат в четыреста пикселей, а тоже прокручивается. Сжатая
+   до неразличимости строка выглядит рабочей, но пользы от неё нет.
+
+   Порядок блоков — от широкого к узкому, и правила накапливаются: то, что
+   задано для планшета, остаётся в силе и на телефоне. */
+
+/* Планшет по ширине и всё, что уже: карточка заказа в одну колонку — две по
+   350 пикселей режут и состав заказа, и данные получателя. */
+@media (max-width: 900px) {
+  .order-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Мозаика держится, пока рядом помещаются два блока. Дальше — колонка: узкая
+   карточка с графиком врёт больше, чем длинная страница. */
+@media (max-width: 1000px) {
+  .stats-grid { grid-template-columns: minmax(0, 1fr); }
+  .span-4, .span-5, .span-7, .span-8, .span-12 { grid-column: span 1; }
+}
+
+/* Планшет: пальцем, а не мышью. Поля и кнопки подрастают до 44 пикселей —
+   меньше этого в попадании начинают промахиваться. Заодно уходит лишний
+   боковой воздух: на 820 пикселях 28 по краям — это заметная часть экрана. */
+@media (max-width: 1024px) {
+  .page { padding: 30px 20px 64px; }
+  .btn { padding: 11px 20px; }
+  .btn.small { padding: 7px 13px; }
+  input[type="text"],
+  input[type="search"],
+  input[type="date"],
+  textarea,
+  select { padding: 12px 14px; }
+  /* Таблицы шире экрана прокручиваются внутри своей карточки, а не растягивают
+     страницу: горизонтальная прокрутка всей страницы — верный признак
+     сломанной вёрстки. */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .data-grid { min-width: 620px; }
+}
+
+/* Телефон. */
+@media (max-width: 640px) {
+  .page { padding: 24px 16px 56px; }
+  .topbar { padding: 12px 14px; gap: 12px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 17px; }
+  .card { padding: 20px 16px; }
+  .head { align-items: flex-start; }
+  .items li { flex-wrap: wrap; }
+  .chat li { max-width: 90%; }
+  /* На телефоне карточка занимает ширину экрана: угол там условный. */
+  .toasts { left: 12px; right: 12px; bottom: 12px; width: auto; }
+
+  /* Вкладки статусов лежат в одной пилюле и переносить их нельзя: перенос
+     разрывает пилюлю на несколько строк, и фон растекается пятном вокруг
+     кнопок. Вместо переноса — прокрутка одной строкой, полосу прячем: её
+     подсказывает обрезанная вкладка у края. */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  /* Поля отбора — во всю ширину, друг под другом: втиснутые в строку, они
+     дают поле поиска шириной в одно слово. Даты остаются парой — «с» и «по»
+     читаются только вместе. */
+  .filters { gap: 10px; }
+  .filters input[type="search"],
+  .filters [data-slot="select"],
+  .filters select { flex: 1 1 100%; width: 100%; }
+  .filters label.inline { flex: 1 1 calc(50% - 5px); }
+  .filters label.inline input[type="date"] { width: 100%; }
+  .filters .btn { flex: 1 1 100%; text-align: center; }
+
+  /* Числа блока — по одному в ряд: две плашки по 150 пикселей режут и подписи,
+     и сами суммы. */
+  .stat-row { grid-template-columns: minmax(0, 1fr); }
+  .metrics { grid-template-columns: minmax(0, 1fr); }
+
+  /* Кнопки над списком не жмутся друг к другу, а занимают строку целиком:
+     промахнуться мимо соседней на телефоне слишком легко. */
+  .head-actions { width: 100%; }
+  .head-actions .btn { flex: 1; text-align: center; }
+
+  .served-value { font-size: 38px; }
+  .stat-value { font-size: 20px; }
+  .chart-tab-value { font-size: 20px; }
+  .pairs .small { min-width: 110px; }
+}
+
+/* График с прокруткой. Ширина берётся из числа столбиков (её задаёт
+   revenue-bars.tsx): пока она меньше карточки, `min-width` ни на что не
+   влияет и прокрутки нет — на компьютере всё как было. */
+.chart-scroll { overflow-x: auto; scrollbar-width: thin; }
+@media (max-width: 760px) {
+  .chart-scroll > * { min-width: var(--chart-min, 100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metric,
+  .metric:hover,
+  .metric:active,
+  a.stat,
+  a.stat:hover,
+  a.stat:active,
+  .attention li,
+  .attention li:hover,
+  .attention-count,
+  .attention-count:hover,
+  .attention li::after,
+  .attention li:hover::after,
+  .metric-title::after,
+  .metric:hover .metric-title::after,
+  a.stat .stat-title::after,
+  a.stat:hover .stat-title::after {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ─── Дополнения панели конкурентов ───
+
+   В CRM размеры ячеек меню задаёт JS: значок под курсором раздувается. Здесь
+   страницы рисует сервер, скриптов нет, поэтому размер ячейки задан обычным
+   правилом — меню выглядит как в CRM, только не «дышит» под мышью. */
+.dock-cell { width: 40px; height: 40px; }
+.dock-glyph { width: 22px; height: 22px; }
+.dock-item { position: relative; }
+.dock-tip { transform: translateX(-50%); opacity: 0; transition: opacity 0.15s ease; }
+.dock-item:hover .dock-tip { opacity: 1; }
+
+/* Состояние конкурента. Кандидат ждёт решения человека — цвет предупреждения,
+   а не ошибки: ничего плохого не случилось, просто нужен взгляд. */
+.tag.st-candidate { background: var(--tag-warn-bg); color: var(--tag-warn-fg); }
+.tag.st-active { background: var(--tag-ok-bg); color: var(--ok); }
+.tag.st-rejected { background: var(--fill); color: var(--muted); }
+.tag.st-own { background: var(--accent-soft); color: var(--accent-deep); }
+
+/* Вид изменения в журнале. Цена — самое важное, что нужно заметить, поэтому
+   она единственная взята «горячей» парой. */
+.tag.ch-price_change { background: var(--tag-hot-bg); color: var(--tag-hot-fg); }
+.tag.ch-new_service { background: var(--accent-soft); color: var(--accent-deep); }
+.tag.ch-new_promotion { background: var(--tag-ship-bg); color: var(--tag-ship-fg); }
+.tag.ch-promotion_ended,
+.tag.ch-first_scan { background: var(--fill); color: var(--muted); }
+.tag.ch-rating_change { background: var(--tag-warn-bg); color: var(--tag-warn-fg); }
+
+/* Строка действий над карточкой: кнопки в ряд, с переносом на узком экране. */
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Две колонки для карточки конкурента: услуги слева, всё остальное справа.
+   Ниже 900px колонки складываются — на телефоне таблица цен и так шире экрана. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .split { grid-template-columns: 1fr; }
+}
+
+/* Предложение прайса: услуга, цена и обоснование одним блоком. Обоснование —
+   главное здесь, поэтому оно не мельче основного текста, а лишь приглушено. */
+.offer { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.offer:last-child { border-bottom: 0; }
+.offer-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+.offer-price { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.offer-why { margin-top: 6px; color: var(--muted); }
+
+/* Поле для адреса сайта: в CRM таких не было, поэтому базовые правила его не
+   застали — приводим к виду остальных полей. */
+input[type="url"] {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+input[type="url"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.filters input[type="url"] { flex: 2 1 260px; width: auto; }
+.filters input[type="text"] { flex: 1 1 180px; width: auto; }
+
+/* Кнопки внутри таблицы стоят в формах: без этого каждая форма занимала бы
+   свою строку и «Взять» с «Не наш» разъезжались бы по вертикали. */
+.row-actions form { display: inline-flex; margin: 0; }

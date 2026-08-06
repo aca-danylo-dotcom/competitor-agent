@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Цены · Конкуренты{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Цены</h1>
+    <p class="lead">Собрано позиций: {{ prices | length }}</p>
+  </div>
+  <div class="head-actions row-actions">
+    <form method="post" action="/actions/pricing">
+      <button class="btn primary" type="submit">Предложить наш прайс</button>
+    </form>
+  </div>
+</div>
+
+{% if stats %}
+  <div class="metrics">
+    {% for name, stat in stats.items() %}
+      <div class="metric">
+        <span class="metric-title">{{ name }}</span>
+        <span class="metric-value">{{ stat.median_low | round | int }}</span>
+        <span class="metric-hint">медиана рынка · от {{ stat.min | round | int }} до {{ stat.max | round | int }} · позиций {{ stat.count }}</span>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if offer %}
+  <div class="card">
+    <h2>Что предлагаем ставить нам</h2>
+    {% for item in offer.recommendations %}
+      <div class="offer">
+        <div class="offer-head">
+          <span class="strong">{{ item.service }}</span>
+          <span class="offer-price">{{ item.price }}</span>
+          {% if item.market_position %}
+            <span class="tag {{ position_tags.get(item.market_position, 'off') }}">{{ position_labels.get(item.market_position, item.market_position) }}</span>
+          {% endif %}
+        </div>
+        <p class="offer-why">{{ item.rationale }}</p>
+      </div>
+    {% endfor %}
+    {% if offer.notes %}
+      <p class="muted" style="margin-top:14px">{{ offer.notes }}</p>
+    {% endif %}
+    <p class="metric-hint" style="margin-top:10px">Посчитано {{ offer.made_at }}</p>
+  </div>
+{% endif %}
+
+{% if prices %}
+  <div class="card table-wrap">
+    <h2>Цены конкурентов</h2>
+    <table class="data-grid">
+      <thead>
+        <tr>
+          <th>Конкурент</th>
+          <th>Услуга</th>
+          <th>Цена</th>
+          <th>За что</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in prices %}
+          <tr>
+            <td><a class="strong" href="/competitors/{{ row.competitor_id }}">{{ row.domain }}</a></td>
+            <td>{{ row.service }}</td>
+            <td class="strong">{{ row.price_text }}</td>
+            <td class="muted small">{{ row.period_label }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <p>Цен пока не собрано.</p>
+    <p class="muted">Конкуренты часто не пишут цены на главной. Агент сам ищет страницы
+      прайса, но их может не быть вовсе — тогда сравнивать останется услуги.</p>
+  </div>
+{% endif %}
+{% endblock %}

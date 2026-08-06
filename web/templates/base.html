@@ -1,0 +1,36 @@
+{# Каркас панели: шапка с меню разделов и поле страницы.
+
+   Вид взят из CRM sales-bot: те же классы, тот же CSS. Разделов четыре, и
+   каждый — отдельный серверный адрес, так что ссылку на карточку конкурента
+   можно отправить как есть. #}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Конкуренты{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Конкуренты</a>
+    <nav class="dock">
+      {% for item in nav %}
+        <a class="dock-item" href="{{ item.url }}">
+          <span class="dock-cell" data-active="{{ 'true' if item.active else 'false' }}">
+            <span class="dock-glyph">{{ item.icon | safe }}</span>
+          </span>
+          <span class="dock-tip">{{ item.title }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+  </header>
+
+  <main class="page">
+    {% for level, text in flashes %}
+      <div class="flash {{ level }}">{{ text }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

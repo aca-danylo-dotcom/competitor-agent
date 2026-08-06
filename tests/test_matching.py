@@ -6,8 +6,8 @@
 import unittest
 
 from services.ingest import (
+    PROMO_MAX_EXTRA_TOKENS,
     PROMO_SIMILARITY_THRESHOLD,
-    PROMO_TOKEN_OVERLAP_THRESHOLD,
     find_similar,
     key_of,
 )
@@ -20,9 +20,7 @@ def same_service(a: str, b: str) -> bool:
 
 def same_promo(a: str, b: str) -> bool:
     return (
-        find_similar(
-            key_of(a), [key_of(b)], PROMO_SIMILARITY_THRESHOLD, PROMO_TOKEN_OVERLAP_THRESHOLD
-        )
+        find_similar(key_of(a), [key_of(b)], PROMO_SIMILARITY_THRESHOLD, PROMO_MAX_EXTRA_TOKENS)
         is not None
     )
 
@@ -36,6 +34,9 @@ class ServiceMatching(unittest.TestCase):
             ("Hire ML Developers", "Hire Golang Developers"),
             ("AI Development", "Adaptive AI Development Company"),
             ("Разработка чат-ботов (Стандарт)", "Разработка чат-ботов (Безлимит)"),
+            # Тарифы одной услуги — разные позиции с разными ценами.
+            ("Разработка чат-ботов — тариф Стандарт", "Разработка чат-ботов — тариф Безлимит"),
+            ("Продвижение на Ozon", "Продвижение на Wildberries"),
         ]
         for a, b in pairs:
             with self.subTest(pair=(a, b)):

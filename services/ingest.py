@@ -25,9 +25,12 @@ from services.pricing import parse_price
 SIMILARITY_THRESHOLD = 0.75
 # Акции — свободный текст, модель переписывает их сильнее, чем названия услуг.
 PROMO_SIMILARITY_THRESHOLD = 0.55
-TOKEN_OVERLAP_THRESHOLD = 0.65
-# У акций формулировки длиннее и вольнее, поэтому по словам требуем меньшего совпадения.
-PROMO_TOKEN_OVERLAP_THRESHOLD = 0.45
+# Сколько лишних слов допускаем у более длинной формулировки той же позиции.
+# «Разработка чат-ботов» и «Разработка чат-ботов (Стандарт)» — одна услуга,
+# а «тариф Стандарт» и «тариф Безлимит» — уже разные: у них разные слова с обеих сторон.
+MAX_EXTRA_TOKENS = 1
+# Акции формулируются вольнее, там разброс слов больше.
+PROMO_MAX_EXTRA_TOKENS = 4
 # Обрезка слова до основы: «сайта» и «сайтов» должны попадать в один токен.
 STEM_LENGTH = 4
 
@@ -41,19 +44,27 @@ def _tokens(text: str) -> set[str]:
     return {word[:STEM_LENGTH] for word in re.findall(r"\w+", text.lower()) if word}
 
 
-def _token_overlap(a: str, b: str) -> float:
-    """Доля общих слов (мера Жаккара) — 1.0 у одинаковых наборов, 0.0 у непересекающихся."""
+def _is_refinement(a: str, b: str, max_extra: int) -> bool:
+    """Одна ли это позиция, названная короче и длиннее.
+
+    Считаем «да», только если слова одного названия целиком входят в другое и лишних
+    слов не больше max_extra. Если различающиеся слова есть с обеих сторон — это разные
+    позиции («SMM» / «SEO», «Стандарт» / «Безлимит»), как бы похоже они ни выглядели.
+    """
     ta, tb = _tokens(a), _tokens(b)
     if not ta or not tb:
-        return 0.0
-    return len(ta & tb) / len(ta | tb)
+        return False
+    extra_a, extra_b = ta - tb, tb - ta
+    if extra_a and extra_b:
+        return False
+    return len(extra_a | extra_b) <= max_extra
 
 
 def find_similar(
     key: str,
     candidates: list[str],
     threshold: float = SIMILARITY_THRESHOLD,
-    overlap_threshold: float = TOKEN_OVERLAP_THRESHOLD,
+    max_extra: int = MAX_EXTRA_TOKENS,
 ) -> str | None:
     """Ищет тот же пункт под другой формулировкой.
 
@@ -69,13 +80,12 @@ def find_similar(
     best: str | None = None
     best_score = 0.0
     for candidate in candidates:
-        overlap = _token_overlap(key, candidate)
-        if overlap < overlap_threshold:
+        if not _is_refinement(key, candidate, max_extra):
             continue
         ratio = difflib.SequenceMatcher(None, key, candidate).ratio()
         if ratio < threshold:
             continue
-        score = overlap + ratio
+        score = ratio
         if score > best_score:
             best, best_score = candidate, score
 
@@ -280,7 +290,7 @@ def _ingest_promotions(
             key_of(text),
             list(active_by_key),
             PROMO_SIMILARITY_THRESHOLD,
-            PROMO_TOKEN_OVERLAP_THRESHOLD,
+            PROMO_MAX_EXTRA_TOKENS,
         )
         if matched is not None:
             active_by_key[matched].last_seen_at = utcnow()

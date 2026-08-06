@@ -2043,3 +2043,20 @@ input[type="url"]:focus {
 }
 .add-row input[type="url"] { flex: 2 1 280px; width: auto; }
 .add-row input[type="text"] { flex: 1 1 180px; width: auto; }
+
+/* ─── Плашка, которая никуда не ведёт ───
+
+   Вид «сюда можно нажать» — уголок в заголовке, подъём и подсветка под
+   курсором — CSS панели даёт всем `.metric`. В разделе «Цены» это статистика
+   рынка: цифра к прочтению, а не переход. Уголок там врал, обещая страницу,
+   которой нет, поэтому у неинтерактивных плашек он снят вместе с движением. */
+div.metric .metric-title::after { content: none; }
+div.metric { cursor: default; }
+div.metric:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: transparent;
+  background: var(--card);
+}
+div.metric:active { transform: none; }
+div.metric:hover .metric-value { color: var(--text); }

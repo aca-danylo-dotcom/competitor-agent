@@ -24,6 +24,10 @@ class Competitor(Base):
     is_own: Mapped[bool] = mapped_column(default=False)
     discovered_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
     approved_at: Mapped[dt.datetime | None] = mapped_column(default=None)
+    # Чем сайт оказался по мнению агента и почему он его взял или отсеял.
+    # Решение принимает модель, поэтому его основание видно человеку.
+    kind: Mapped[str | None] = mapped_column(Text, default=None)
+    screening_note: Mapped[str | None] = mapped_column(Text, default=None)
 
     snapshots: Mapped[list["PageSnapshot"]] = relationship(back_populates="competitor")
     services: Mapped[list["ServiceOffering"]] = relationship(back_populates="competitor")

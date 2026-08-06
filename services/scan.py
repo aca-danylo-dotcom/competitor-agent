@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from db.models import Competitor, ServiceOffering
-from services import extractor, ingest, scraper
+from services import discovery, extractor, ingest, screening, scraper
 
 
 def scan_competitor(session: Session, competitor: Competitor, max_pages: int = 3) -> dict:
@@ -26,6 +26,30 @@ def scan_competitor(session: Session, competitor: Competitor, max_pages: int = 3
         "services": sum(len(data.get("services", [])) for _, data in results),
         "promotions": sum(len(data.get("promotions", [])) for _, data in results),
         "changes": changes,
+    }
+
+
+def refresh(session: Session, max_pages: int = 3) -> dict:
+    """Полный прогон одной кнопкой: найти — отобрать — проверить.
+
+    Человек в этой цепочке не участвует: отбором занимается модель (см.
+    services/screening.py), а под наблюдение попадают только те сайты, которые
+    она сочла похожими на нас.
+    """
+    found: dict = {"added": [], "skipped": []}
+    try:
+        found = discovery.run_discovery(session, source="scheduled")
+    except discovery.DiscoveryLimitError as exc:
+        found["error"] = str(exc)
+
+    verdicts = screening.screen_pending(session)
+    reports = scan_all(session, max_pages=max_pages)
+
+    return {
+        "found": len(found.get("added", [])),
+        "taken": [v for v in verdicts if v["similar"]],
+        "dropped": [v for v in verdicts if not v["similar"]],
+        "scanned": reports,
     }
 
 

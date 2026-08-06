@@ -69,7 +69,11 @@ PERIOD_LABELS = {
 }
 
 FLASHES = {
-    "discover_started": ("ok", "Ищем конкурентов. Обновите страницу через минуту."),
+    "refresh_started": (
+        "ok",
+        "Ищем новые компании, отбираем похожие на нас и проверяем сайты. "
+        "Это занимает несколько минут — обновите страницу позже.",
+    ),
     "scan_started": ("ok", "Проверяем сайты. Это занимает несколько минут."),
     "pricing_started": ("ok", "Считаем предложение по нашему прайсу. Обновите страницу через минуту."),
     "busy": ("warn", "Предыдущая проверка ещё идёт — дождитесь её окончания."),
@@ -171,9 +175,11 @@ def _run_in_background(work, *args) -> bool:
 
 @router.get("/", response_class=HTMLResponse)
 @router.get("/competitors", response_class=HTMLResponse)
-def competitors(request: Request, status: str | None = None):
+def competitors(request: Request, status: str = "active"):
     with SessionLocal() as session:
         query = select(Competitor).order_by(Competitor.is_own.desc(), Competitor.id)
+        # По умолчанию показываем тех, за кем следим: отсеянные лежат отдельной
+        # вкладкой на случай, если агент ошибся и сайт нужно вернуть.
         if status in STATUS_LABELS:
             query = query.where(Competitor.status == status)
 
@@ -203,6 +209,8 @@ def competitors(request: Request, status: str | None = None):
                     "services": services,
                     "price_from": cheapest,
                     "last_scan": _fmt(last),
+                    "note": competitor.screening_note,
+                    "kind": competitor.kind,
                 }
             )
 
@@ -213,11 +221,11 @@ def competitors(request: Request, status: str | None = None):
                     Competitor.status == "active", Competitor.is_own.is_(False)
                 )
             ),
-            "candidates": session.scalar(
-                select(func.count(Competitor.id)).where(Competitor.status == "candidate")
-            ),
             "changes_week": session.scalar(
                 select(func.count(ChangeLog.id)).where(ChangeLog.captured_at >= week_ago)
+            ),
+            "dropped": session.scalar(
+                select(func.count(Competitor.id)).where(Competitor.status == "rejected")
             ),
         }
         last = session.scalar(select(func.max(PageSnapshot.captured_at)))
@@ -229,7 +237,7 @@ def competitors(request: Request, status: str | None = None):
         rows=rows,
         metrics=metrics,
         last_scan=_fmt(last),
-        status=status if status in STATUS_LABELS else None,
+        status=status if status in STATUS_LABELS else "all",
     )
 
 
@@ -326,6 +334,7 @@ def competitor_card(request: Request, competitor_id: int):
             "url": competitor.url,
             "status": competitor.status,
             "is_own": competitor.is_own,
+            "note": competitor.screening_note,
         }
 
     return _page(
@@ -473,10 +482,11 @@ def scan_everyone(tasks: BackgroundTasks):
     return _back("/", "scan_started")
 
 
-@router.post("/actions/discover")
-def discover(tasks: BackgroundTasks):
-    tasks.add_task(_run_in_background, _discover_work)
-    return _back("/competitors", "discover_started")
+@router.post("/actions/refresh")
+def refresh(tasks: BackgroundTasks):
+    """Одна кнопка на всё: поиск, отбор моделью, проверка сайтов."""
+    tasks.add_task(_run_in_background, _refresh_work)
+    return _back("/", "refresh_started")
 
 
 @router.post("/actions/pricing")
@@ -497,12 +507,9 @@ def _scan_all_work() -> None:
         scan.scan_all(session)
 
 
-def _discover_work() -> None:
+def _refresh_work() -> None:
     with SessionLocal() as session:
-        try:
-            discovery.run_discovery(session)
-        except discovery.DiscoveryLimitError:
-            log.warning("дневной лимит поиска исчерпан")
+        scan.refresh(session)
 
 
 def _pricing_work() -> None:

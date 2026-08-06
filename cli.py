@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from db.models import ChangeLog, Competitor, ServiceOffering, utcnow
 from db.session import SessionLocal
-from services import discovery, pricing, scan
+from services import discovery, pricing, scan, screening
 
 
 def cmd_add(args) -> None:
@@ -54,13 +54,32 @@ def cmd_discover(args) -> None:
             return
 
         print(f"Запросы: {', '.join(result['queries'])}")
-        print(f"Найдено результатов: {result['found']}, новых кандидатов: {len(result['added'])}")
+        print(f"Найдено результатов: {result['found']}, новых сайтов: {len(result['added'])}")
         for item in result["added"]:
             print(f"  #{item['id']}  {item['domain']}  — {item['name'][:70]}")
         if result["skipped"]:
             print(f"Пропущены каталоги: {', '.join(result['skipped'])}")
-        if result["runs_today"] is not None:
-            print(f"Ручных запусков сегодня: {result['runs_today']}")
+
+        if not args.no_screen:
+            print("\nОтбор:")
+            for verdict in screening.screen_pending(session):
+                mark = "берём " if verdict["similar"] else "мимо  "
+                print(f"  {mark} {verdict['domain']:32} [{verdict['kind']}] {verdict['reason'][:80]}")
+
+
+def cmd_refresh(args) -> None:
+    """Весь цикл разом: найти, отобрать, проверить."""
+    with SessionLocal() as session:
+        result = scan.refresh(session, max_pages=args.pages)
+
+    print(f"Найдено новых сайтов: {result['found']}")
+    for verdict in result["taken"]:
+        print(f"  взяли: {verdict['domain']} — {verdict['reason'][:80]}")
+    for verdict in result["dropped"]:
+        print(f"  мимо:  {verdict['domain']} [{verdict['kind']}] — {verdict['reason'][:70]}")
+    print()
+    for report in result["scanned"]:
+        _print_report(report)
 
 
 def cmd_list(args) -> None:
@@ -187,8 +206,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_add.add_argument("--own", action="store_true", help="это наш сайт")
     p_add.set_defaults(func=cmd_add)
 
-    p_disc = sub.add_parser("discover", help="найти новых конкурентов")
+    p_refresh = sub.add_parser("refresh", help="полный цикл: найти, отобрать, проверить")
+    p_refresh.add_argument("--pages", type=int, default=3)
+    p_refresh.set_defaults(func=cmd_refresh)
+
+    p_disc = sub.add_parser("discover", help="только поиск и отбор, без проверки сайтов")
     p_disc.add_argument("--source", choices=["manual", "scheduled"], default="manual")
+    p_disc.add_argument("--no-screen", action="store_true", help="не отбирать, оставить кандидатами")
     p_disc.set_defaults(func=cmd_discover)
 
     p_list = sub.add_parser("list", help="список конкурентов")

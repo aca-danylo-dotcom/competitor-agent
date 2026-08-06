@@ -10,38 +10,34 @@
     </p>
   </div>
   <div class="head-actions row-actions">
-    <form method="post" action="/actions/discover">
-      <button class="btn" type="submit">Найти конкурентов</button>
-    </form>
-    <form method="post" action="/actions/scan">
-      <button class="btn primary" type="submit">Проверить всех</button>
+    <form method="post" action="/actions/refresh">
+      <button class="btn primary" type="submit">Обновить</button>
     </form>
   </div>
 </div>
 
 <div class="metrics">
   <a class="metric" href="/competitors?status=active">
-    <span class="metric-title">Под наблюдением</span>
+    <span class="metric-title">Похожие на нас</span>
     <span class="metric-value">{{ metrics.active }}</span>
-    <span class="metric-hint">проверяем регулярно</span>
-  </a>
-  <a class="metric" href="/competitors?status=candidate">
-    <span class="metric-title">Ждут решения</span>
-    <span class="metric-value">{{ metrics.candidates }}</span>
-    <span class="metric-hint">найдены поиском, нужен ваш взгляд</span>
+    <span class="metric-hint">агент следит за ними сам</span>
   </a>
   <a class="metric" href="/changes">
     <span class="metric-title">Изменений за неделю</span>
     <span class="metric-value">{{ metrics.changes_week }}</span>
     <span class="metric-hint">новые услуги, цены и акции</span>
   </a>
+  <a class="metric" href="/competitors?status=rejected">
+    <span class="metric-title">Отсеяно</span>
+    <span class="metric-value">{{ metrics.dropped }}</span>
+    <span class="metric-hint">статьи, каталоги, платформы</span>
+  </a>
 </div>
 
 <nav class="tabs">
-  <a href="/competitors" {% if not status %}class="on"{% endif %}>Все</a>
-  <a href="/competitors?status=active" {% if status == 'active' %}class="on"{% endif %}>Под наблюдением</a>
-  <a href="/competitors?status=candidate" {% if status == 'candidate' %}class="on"{% endif %}>Ждут решения</a>
-  <a href="/competitors?status=rejected" {% if status == 'rejected' %}class="on"{% endif %}>Отклонённые</a>
+  <a href="/competitors?status=active" {% if status == 'active' or not status %}class="on"{% endif %}>Похожие на нас</a>
+  <a href="/competitors?status=rejected" {% if status == 'rejected' %}class="on"{% endif %}>Отсеянные</a>
+  <a href="/competitors?status=all" {% if status == 'all' %}class="on"{% endif %}>Все</a>
 </nav>
 
 {% if rows %}
@@ -62,7 +58,8 @@
           <tr>
             <td>
               <a class="strong" href="/competitors/{{ row.id }}">{{ row.domain }}</a>
-              <span class="muted small">{{ row.name[:60] }}</span>
+              {# Решение принял агент, поэтому рядом стоит его довод. #}
+              <span class="muted small">{{ row.note or row.name[:70] }}</span>
             </td>
             <td>
               {% if row.is_own %}
@@ -85,17 +82,20 @@
             <td class="muted small">{{ row.last_scan or '—' }}</td>
             <td>
               <span class="row-actions">
-                {% if row.status == 'candidate' %}
+                {% if row.status == 'rejected' %}
+                  {# Агент мог ошибиться — сайт возвращается под наблюдение одним нажатием. #}
                   <form method="post" action="/competitors/{{ row.id }}/approve">
-                    <button class="btn small" type="submit">Взять</button>
-                  </form>
-                  <form method="post" action="/competitors/{{ row.id }}/reject">
-                    <button class="btn small danger-btn" type="submit">Не наш</button>
+                    <button class="btn small" type="submit">Вернуть</button>
                   </form>
                 {% else %}
                   <form method="post" action="/competitors/{{ row.id }}/scan">
                     <button class="btn small" type="submit">Проверить</button>
                   </form>
+                  {% if not row.is_own %}
+                    <form method="post" action="/competitors/{{ row.id }}/reject">
+                      <button class="btn small danger-btn" type="submit">Убрать</button>
+                    </form>
+                  {% endif %}
                 {% endif %}
               </span>
             </td>
@@ -107,7 +107,8 @@
 {% else %}
   <div class="card empty-state">
     <p>Здесь пока пусто.</p>
-    <p class="muted">Нажмите «Найти конкурентов» — агент поищет их по ключевым запросам.</p>
+    <p class="muted">Нажмите «Обновить» — агент поищет компании, похожие на нас, отберёт
+      подходящие сам и сразу их проверит.</p>
   </div>
 {% endif %}
 

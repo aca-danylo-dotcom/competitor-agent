@@ -14,20 +14,26 @@
     </p>
   </div>
   <div class="head-actions row-actions">
-    {% if competitor.status == 'candidate' %}
+    {% if competitor.status == 'rejected' %}
       <form method="post" action="/competitors/{{ competitor.id }}/approve">
-        <button class="btn primary" type="submit">Взять под наблюдение</button>
-      </form>
-      <form method="post" action="/competitors/{{ competitor.id }}/reject">
-        <button class="btn danger-btn" type="submit">Не наш конкурент</button>
+        <button class="btn primary" type="submit">Вернуть под наблюдение</button>
       </form>
     {% else %}
       <form method="post" action="/competitors/{{ competitor.id }}/scan">
         <button class="btn primary" type="submit">Проверить сейчас</button>
       </form>
+      {% if not competitor.is_own %}
+        <form method="post" action="/competitors/{{ competitor.id }}/reject">
+          <button class="btn danger-btn" type="submit">Убрать из списка</button>
+        </form>
+      {% endif %}
     {% endif %}
   </div>
 </div>
+
+{% if competitor.note %}
+  <p class="table-note">Агент решил так: {{ competitor.note }}</p>
+{% endif %}
 
 {% if positioning %}
   <div class="card">

@@ -11,6 +11,7 @@ from services.ingest import (
     find_similar,
     key_of,
 )
+from services import scraper
 from services.discovery import is_ignored_market
 from services.pricing import is_ignored, parse_price
 
@@ -98,6 +99,30 @@ class PriceParsing(unittest.TestCase):
 
     def test_text_without_numbers(self):
         self.assertIsNone(parse_price("индивидуальная цена"))
+
+
+class PriceOnPage(unittest.TestCase):
+    """Дешёвая проверка «есть ли на странице деньги» — по ней решаем, звать ли модель."""
+
+    def test_finds_prices(self):
+        for text in (
+            "Get Instant Access $49 SAVE 49%",
+            "Вартість: від 15000 грн",
+            "Starting at €1,200 per project",
+            "Цена 25 000 ₴",
+            "Plans from 2000 USD",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(scraper.has_price(text))
+
+    def test_ignores_pages_without_money(self):
+        for text in (
+            "We build AI agents for enterprise clients. Contact us for a quote.",
+            "Топ-10 агентств 2026 года",
+            "Свяжитесь с нами, и мы обсудим проект",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(scraper.has_price(text))
 
 
 class IgnoredMarkets(unittest.TestCase):
